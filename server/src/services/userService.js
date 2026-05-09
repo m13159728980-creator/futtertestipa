@@ -1,9 +1,12 @@
 const db = require('../../database/db');
 
 const ACCOUNT_PATTERN = /^@[A-Za-z]{1,9}$/;
-const ACCOUNT_MESSAGE = '账号必须是英文，且以@开头';
-const NAME_MESSAGE = '请输入名字';
-const DUPLICATE_ACCOUNT_MESSAGE = '账号已被注册';
+const ACCOUNT_MESSAGE = '\u8d26\u53f7\u5fc5\u987b\u662f\u82f1\u6587\uff0c\u4e14\u4ee5@\u5f00\u5934';
+const NAME_MESSAGE = '\u8bf7\u8f93\u5165\u540d\u5b57';
+const DUPLICATE_ACCOUNT_MESSAGE = '\u8d26\u53f7\u5df2\u88ab\u6ce8\u518c';
+const DELETE_CONFIRMATION_MESSAGE = '\u8bf7\u8f93\u5165\u6b63\u786e\u8d26\u53f7\u786e\u8ba4\u6ce8\u9500';
+const AVATAR_MESSAGE = '\u5934\u50cf\u7f16\u53f7\u5fc5\u987b\u57280\u52308\u4e4b\u95f4';
+const USER_NOT_FOUND_MESSAGE = '\u7528\u6237\u4e0d\u5b58\u5728';
 
 class UserServiceError extends Error {
   constructor(message, statusCode) {
@@ -57,6 +60,19 @@ function isDuplicateError(error) {
 
 function createPostgresUserRepository(query = db.query) {
   return {
+    async findByAccount(account) {
+      const { rows } = await query(
+        `
+          SELECT id, account, display_name, avatar_index, token_version, deleted_at
+          FROM users
+          WHERE account = $1
+          LIMIT 1
+        `,
+        [account]
+      );
+      return mapUser(rows[0]);
+    },
+
     async findActiveByAccount(account) {
       const { rows } = await query(
         `
@@ -114,12 +130,26 @@ function createPostgresUserRepository(query = db.query) {
     async softDelete(id) {
       const { rows } = await query(
         `
-          UPDATE users
-          SET deleted_at = NOW(),
-              token_version = token_version + 1
-          WHERE id = $1
-            AND deleted_at IS NULL
-          RETURNING id, account, display_name, avatar_index, token_version, deleted_at
+          WITH deleted_user AS (
+            UPDATE users
+            SET deleted_at = NOW(),
+                token_version = token_version + 1
+            WHERE id = $1
+              AND deleted_at IS NULL
+            RETURNING id, account, display_name, avatar_index, token_version, deleted_at
+          ),
+          scheduled_deletion AS (
+            INSERT INTO account_deletions (user_id, purge_after)
+            SELECT id, NOW() + INTERVAL '30 days'
+            FROM deleted_user
+            ON CONFLICT (user_id) DO UPDATE
+            SET requested_at = NOW(),
+                purge_after = EXCLUDED.purge_after,
+                completed_at = NULL
+            RETURNING user_id
+          )
+          SELECT id, account, display_name, avatar_index, token_version, deleted_at
+          FROM deleted_user
         `,
         [id]
       );
@@ -133,14 +163,14 @@ function createUserService(options = {}) {
 
   async function isAccountAvailable(account) {
     validateAccount(account);
-    const existing = await repository.findActiveByAccount(account);
+    const existing = await repository.findByAccount(account);
     return !existing;
   }
 
   async function register({ account, displayName, name }) {
     validateAccount(account);
     const normalizedDisplayName = normalizeDisplayName(displayName ?? name);
-    const existing = await repository.findActiveByAccount(account);
+    const existing = await repository.findByAccount(account);
 
     if (existing) {
       throw new UserServiceError(DUPLICATE_ACCOUNT_MESSAGE, 409);
@@ -172,22 +202,31 @@ function createUserService(options = {}) {
 
   async function updateAvatar(userId, avatarIndex) {
     if (!Number.isInteger(avatarIndex) || avatarIndex < 0 || avatarIndex > 8) {
-      throw new UserServiceError('头像编号必须在0到8之间', 400);
+      throw new UserServiceError(AVATAR_MESSAGE, 400);
     }
 
     const user = await repository.updateAvatar(userId, avatarIndex);
     if (!user) {
-      throw new UserServiceError('用户不存在', 404);
+      throw new UserServiceError(USER_NOT_FOUND_MESSAGE, 404);
     }
     return user;
   }
 
-  async function softDelete(userId) {
-    const user = await repository.softDelete(userId);
-    if (!user) {
-      throw new UserServiceError('用户不存在', 404);
+  async function softDelete(userId, confirmationAccount) {
+    const activeUser = await repository.findActiveById(userId);
+    if (!activeUser) {
+      throw new UserServiceError(USER_NOT_FOUND_MESSAGE, 404);
     }
-    return user;
+
+    if (confirmationAccount !== activeUser.account) {
+      throw new UserServiceError(DELETE_CONFIRMATION_MESSAGE, 400);
+    }
+
+    const deletedUser = await repository.softDelete(userId);
+    if (!deletedUser) {
+      throw new UserServiceError(USER_NOT_FOUND_MESSAGE, 404);
+    }
+    return deletedUser;
   }
 
   return {
@@ -202,6 +241,7 @@ function createUserService(options = {}) {
 
 module.exports = {
   ACCOUNT_MESSAGE,
+  DELETE_CONFIRMATION_MESSAGE,
   DUPLICATE_ACCOUNT_MESSAGE,
   NAME_MESSAGE,
   UserServiceError,

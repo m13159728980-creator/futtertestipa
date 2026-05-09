@@ -6,7 +6,7 @@ function createAuthMiddleware(userService) {
     const match = header.match(/^Bearer\s+(.+)$/i);
 
     if (!match) {
-      return res.status(401).json({ message: '未登录' });
+      return res.status(401).json({ message: '\u672a\u767b\u5f55' });
     }
 
     try {
@@ -14,13 +14,13 @@ function createAuthMiddleware(userService) {
       const user = await userService.validateTokenPayload(payload);
 
       if (!user) {
-        return res.status(401).json({ message: '登录已失效' });
+        return res.status(401).json({ message: '\u767b\u5f55\u5df2\u5931\u6548' });
       }
 
       req.user = user;
       return next();
     } catch (error) {
-      return res.status(401).json({ message: '登录已失效' });
+      return res.status(401).json({ message: '\u767b\u5f55\u5df2\u5931\u6548' });
     }
   };
 }
