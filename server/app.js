@@ -5,15 +5,18 @@ const healthRoutes = require('./src/api/healthRoutes');
 const { createAuthRoutes } = require('./src/api/authRoutes');
 const { createContactRoutes } = require('./src/api/contactRoutes');
 const { createGroupRoutes } = require('./src/api/groupRoutes');
+const { createMessageRoutes } = require('./src/api/messageRoutes');
 const { createUserRoutes } = require('./src/api/userRoutes');
 const { createAuthMiddleware } = require('./src/middleware/auth');
 const { createGroupService } = require('./src/services/groupService');
+const { createMessageService } = require('./src/services/messageService');
 const { createUserService } = require('./src/services/userService');
 
 function createApp(options = {}) {
   const app = express();
   const userService = createUserService(options);
   const groupService = createGroupService(options);
+  const messageService = createMessageService(options);
   const authMiddleware = createAuthMiddleware(userService);
 
   app.use(cors());
@@ -23,6 +26,7 @@ function createApp(options = {}) {
   app.use(createUserRoutes({ authMiddleware, userService }));
   app.use(createContactRoutes({ authMiddleware, groupService }));
   app.use(createGroupRoutes({ authMiddleware, groupService }));
+  app.use(createMessageRoutes({ authMiddleware, messageService }));
 
   return app;
 }
