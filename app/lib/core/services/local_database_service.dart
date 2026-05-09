@@ -20,6 +20,8 @@ abstract interface class MessageStore {
 
   Future<void> delete(String id);
 
+  Future<void> clear();
+
   Future<void> updateStatus(String id, MessageStatus status);
 
   Future<void> close();
@@ -70,6 +72,8 @@ class LocalDatabaseService {
   }
 
   Future<void> deleteMessage(String id) => _store.delete(id);
+
+  Future<void> clear() => _store.clear();
 
   Future<void> markBurned(String id) =>
       _store.updateStatus(id, MessageStatus.burned);
@@ -196,6 +200,11 @@ class SqfliteMessageStore implements MessageStore {
   }
 
   @override
+  Future<void> clear() async {
+    await _db.delete('messages');
+  }
+
+  @override
   Future<void> updateStatus(String id, MessageStatus status) async {
     await _db.update(
       'messages',
@@ -293,6 +302,12 @@ class InMemoryMessageStore implements MessageStore {
   Future<void> delete(String id) async {
     _checkOpen();
     _messages.remove(id);
+  }
+
+  @override
+  Future<void> clear() async {
+    _checkOpen();
+    _messages.clear();
   }
 
   @override

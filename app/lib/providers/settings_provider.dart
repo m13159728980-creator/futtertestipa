@@ -1,3 +1,4 @@
+import 'package:app/core/services/media_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
 import 'package:app/models/settings.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,10 @@ final settingsStorageProvider = Provider<SettingsStorage>((ref) {
   return FlutterSecureSettingsStorage();
 });
 
+final cacheServiceProvider = Provider<CacheService>((ref) {
+  return MediaCacheService(MediaService());
+});
+
 final secureWindowServiceProvider = Provider<SecureWindowService>((ref) {
   return const SecureWindowService();
 });
@@ -15,6 +20,7 @@ final secureWindowServiceProvider = Provider<SecureWindowService>((ref) {
 final settingsProvider = ChangeNotifierProvider<SettingsProvider>((ref) {
   return SettingsProvider(
     storage: ref.watch(settingsStorageProvider),
+    cacheService: ref.watch(cacheServiceProvider),
     secureWindowService: ref.watch(secureWindowServiceProvider),
   )..initialize();
 });
@@ -24,7 +30,22 @@ abstract interface class SettingsStorage {
 
   Future<void> saveSettings(AppSettings settings);
 
+  Future<void> clearSettings();
+}
+
+abstract interface class CacheService {
   Future<void> clearCache();
+}
+
+class MediaCacheService implements CacheService {
+  const MediaCacheService(this._mediaService);
+
+  final MediaService _mediaService;
+
+  @override
+  Future<void> clearCache() {
+    return _mediaService.clearCache();
+  }
 }
 
 class FlutterSecureSettingsStorage implements SettingsStorage {
@@ -36,11 +57,6 @@ class FlutterSecureSettingsStorage implements SettingsStorage {
   final FlutterSecureStorage _storage;
 
   @override
-  Future<void> clearCache() async {
-    // TODO(local-cache): clear media/cache directories when cache service lands.
-  }
-
-  @override
   Future<AppSettings?> readSettings() async {
     final source = await _storage.read(key: _settingsKey);
     return source == null ? null : AppSettings.fromStorageJson(source);
@@ -50,6 +66,11 @@ class FlutterSecureSettingsStorage implements SettingsStorage {
   Future<void> saveSettings(AppSettings settings) {
     return _storage.write(key: _settingsKey, value: settings.toStorageJson());
   }
+
+  @override
+  Future<void> clearSettings() {
+    return _storage.delete(key: _settingsKey);
+  }
 }
 
 class InMemorySettingsStorage implements SettingsStorage {
@@ -57,12 +78,7 @@ class InMemorySettingsStorage implements SettingsStorage {
     : _settings = initialSettings;
 
   AppSettings? _settings;
-  int clearCacheCalls = 0;
-
-  @override
-  Future<void> clearCache() async {
-    clearCacheCalls++;
-  }
+  int clearSettingsCalls = 0;
 
   @override
   Future<AppSettings?> readSettings() async => _settings;
@@ -71,16 +87,25 @@ class InMemorySettingsStorage implements SettingsStorage {
   Future<void> saveSettings(AppSettings settings) async {
     _settings = settings;
   }
+
+  @override
+  Future<void> clearSettings() async {
+    clearSettingsCalls++;
+    _settings = null;
+  }
 }
 
 class SettingsProvider extends ChangeNotifier {
   SettingsProvider({
     required SettingsStorage storage,
     required SecureWindowService secureWindowService,
+    CacheService? cacheService,
   }) : _storage = storage,
+       _cacheService = cacheService ?? MediaCacheService(MediaService()),
        _secureWindowService = secureWindowService;
 
   final SettingsStorage _storage;
+  final CacheService _cacheService;
   final SecureWindowService _secureWindowService;
 
   AppSettings _settings = const AppSettings();
@@ -157,7 +182,14 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> clearCache() {
-    return _storage.clearCache();
+    return _cacheService.clearCache();
+  }
+
+  Future<void> reset() async {
+    _settings = const AppSettings();
+    await _secureWindowService.setEnabled(_settings.disableScreenshots);
+    await _storage.clearSettings();
+    notifyListeners();
   }
 
   Future<void> _update(AppSettings next) async {

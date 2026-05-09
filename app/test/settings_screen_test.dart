@@ -1,8 +1,12 @@
 import 'package:app/core/services/api_service.dart';
+import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
+import 'package:app/core/utils/crypto_service.dart';
+import 'package:app/models/message.dart';
 import 'package:app/models/user.dart';
 import 'package:app/providers/auth_provider.dart';
+import 'package:app/providers/chat_provider.dart';
 import 'package:app/providers/settings_provider.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +22,10 @@ void main() {
       secureWindowService: _FakeSecureWindowService(),
     );
     await tester.pumpWidget(_testApp(settingsNotifier: settings));
+
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('语言'), findsOneWidget);
+    expect(find.text('中文'), findsOneWidget);
 
     await tester.tap(find.text('English'));
     await tester.pump();
@@ -70,21 +78,36 @@ void main() {
     expect(settings.settings.disableScreenshots, isTrue);
   });
 
-  testWidgets('account deletion requires exact account confirmation', (
+  testWidgets('account deletion clears local cache and resets settings after exact confirmation', (
     tester,
   ) async {
     _useTallTestViewport(tester);
     final api = _FakeApiService();
     final storage = InMemorySecureStorage();
+    final settingsStorage = InMemorySettingsStorage();
+    final cacheService = _FakeCacheService();
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    await database.open();
+    await database.upsertMessage(_message(id: 'm1'));
     await storage.saveSession(_testUser);
     final auth = AuthProvider(apiService: api, storageService: storage);
     await auth.initialize();
     final settings = SettingsProvider(
-      storage: InMemorySettingsStorage(),
+      storage: settingsStorage,
+      cacheService: cacheService,
       secureWindowService: _FakeSecureWindowService(),
     );
+    await settings.setLanguage('en');
+    await settings.setMessageNotifications(false);
     await tester.pumpWidget(
-      _testApp(settingsNotifier: settings, authNotifier: auth),
+      _testApp(
+        settingsNotifier: settings,
+        authNotifier: auth,
+        database: database,
+      ),
     );
 
     await tester.scrollUntilVisible(
@@ -95,8 +118,10 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('delete-account-tile')));
     await tester.pumpAndSettle();
+    expect(find.text('注销账号'), findsAtLeastNWidgets(1));
     await tester.tap(find.text('继续注销'));
     await tester.pumpAndSettle();
+    expect(find.text('确认注销'), findsAtLeastNWidgets(1));
     await tester.enterText(
       find.byKey(const ValueKey('delete-account-confirmation')),
       '@wrong',
@@ -117,6 +142,18 @@ void main() {
     expect(api.deleteAccountCalls, ['@XiaoMing']);
     expect(auth.status, AuthStatus.unauthenticated);
     expect(await storage.readToken(), isNull);
+    expect(cacheService.clearCacheCalls, 1);
+    expect(settingsStorage.clearSettingsCalls, 1);
+    expect(settings.settings.languageCode, 'zh');
+    expect(settings.settings.messageNotifications, isTrue);
+    expect(
+      await database.listMessages(
+        toType: ConversationType.user,
+        peerId: 'bob',
+        currentUserId: 'alice',
+      ),
+      isEmpty,
+    );
   });
 }
 
@@ -132,14 +169,29 @@ void _useTallTestViewport(WidgetTester tester) {
 Widget _testApp({
   required SettingsProvider settingsNotifier,
   AuthProvider? authNotifier,
+  LocalDatabaseService? database,
 }) {
   return ProviderScope(
     overrides: [
       settingsProvider.overrideWith((ref) => settingsNotifier),
-      if (authNotifier != null)
-        authProvider.overrideWith((ref) => authNotifier),
+      if (authNotifier != null) authProvider.overrideWith((ref) => authNotifier),
+      if (database != null)
+        localDatabaseServiceProvider.overrideWith((ref) => Future.value(database)),
     ],
     child: const MaterialApp(home: SettingsScreen()),
+  );
+}
+
+Message _message({required String id}) {
+  return Message(
+    id: id,
+    fromId: 'alice',
+    toId: 'bob',
+    toType: ConversationType.user,
+    type: MessageType.text,
+    content: 'hello',
+    timestamp: DateTime.utc(2026, 5, 10),
+    status: MessageStatus.sent,
   );
 }
 
@@ -164,6 +216,15 @@ class _FakeSecureWindowService extends SecureWindowService {
   @override
   Future<void> setEnabled(bool enabled) async {
     calls.add(enabled);
+  }
+}
+
+class _FakeCacheService implements CacheService {
+  int clearCacheCalls = 0;
+
+  @override
+  Future<void> clearCache() async {
+    clearCacheCalls++;
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:app/core/constants/avatar_catalog.dart';
 import 'package:app/models/settings.dart';
 import 'package:app/providers/auth_provider.dart';
+import 'package:app/providers/chat_provider.dart';
 import 'package:app/providers/settings_provider.dart';
 import 'package:app/screens/app_lock_screen.dart';
 import 'package:app/widgets/default_avatar.dart';
@@ -240,7 +241,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('注销账号'),
-        content: const Text('注销账号会删除当前会话并清空本地密钥。本操作不可恢复。'),
+        content: const Text('注销账号会删除当前会话并清空本地密钥、本地消息和缓存。本操作不可恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -298,8 +299,11 @@ class SettingsScreen extends ConsumerWidget {
                       setState(() => errorText = '账号不匹配');
                       return;
                     }
+                    final database = await ref.read(localDatabaseServiceProvider);
                     await ref.read(authProvider).deleteAccount(confirmation);
-                    // TODO(local-db): invoke LocalDatabaseService clear hook when exposed.
+                    await database.clear();
+                    await ref.read(settingsProvider).clearCache();
+                    await ref.read(settingsProvider).reset();
                     if (context.mounted) {
                       Navigator.of(context).popUntil((route) => route.isFirst);
                     }

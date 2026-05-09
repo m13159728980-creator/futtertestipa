@@ -179,6 +179,25 @@ void main() {
     expect(messages.map((message) => message.id), ['m2']);
   });
 
+  test('clears all local messages', () async {
+    await database.upsertMessage(
+      _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'one'),
+    );
+    await database.upsertMessage(
+      _message(id: 'm2', fromId: 'bob', toId: 'alice', content: 'two'),
+    );
+
+    await database.clear();
+
+    final messages = await database.listMessages(
+      toType: ConversationType.user,
+      peerId: 'bob',
+      currentUserId: 'alice',
+    );
+
+    expect(messages, isEmpty);
+  });
+
   test('marks messages as burned', () async {
     await database.upsertMessage(
       _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'one'),
