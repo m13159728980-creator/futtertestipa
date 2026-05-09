@@ -1,7 +1,12 @@
 require('dotenv').config();
 
 function parseInteger(value, fallback, isValid = () => true) {
-  const parsed = Number(value);
+  const normalized = String(value).trim();
+  if (!/^[0-9]+$/.test(normalized)) {
+    return fallback;
+  }
+
+  const parsed = Number(normalized);
   return Number.isInteger(parsed) && isValid(parsed) ? parsed : fallback;
 }
 

@@ -29,6 +29,36 @@ test('falls back when API_PORT is malformed', () => {
   expect(config.apiPort).toBe(3000);
 });
 
+test('falls back when WS_PORT is malformed', () => {
+  const config = loadConfig({ WS_PORT: '3001abc' });
+
+  expect(config.wsPort).toBe(3001);
+});
+
+test('falls back when OFFLINE_RETENTION_DAYS is malformed', () => {
+  const config = loadConfig({ OFFLINE_RETENTION_DAYS: '7abc' });
+
+  expect(config.offlineRetentionDays).toBe(7);
+});
+
+test('falls back when API_PORT uses exponential notation', () => {
+  const config = loadConfig({ API_PORT: '1e3' });
+
+  expect(config.apiPort).toBe(3000);
+});
+
+test('falls back when API_PORT uses hexadecimal notation', () => {
+  const config = loadConfig({ API_PORT: '0x50' });
+
+  expect(config.apiPort).toBe(3000);
+});
+
+test('accepts decimal API_PORT with surrounding whitespace', () => {
+  const config = loadConfig({ API_PORT: ' 4000 ' });
+
+  expect(config.apiPort).toBe(4000);
+});
+
 test('falls back when API_PORT is below valid port range', () => {
   const config = loadConfig({ API_PORT: '-1' });
 
