@@ -18,6 +18,8 @@ server/storage/media/
 server/storage/tmp/
 
 .superpowers/
+.worktrees
+.worktrees/
 *.apk
 *.jks
 *.keystore
