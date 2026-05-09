@@ -79,6 +79,10 @@ function generateGroupCode() {
   return String(crypto.randomInt(0, 100000000)).padStart(8, '0');
 }
 
+function isUniqueViolation(error) {
+  return error && error.code === '23505';
+}
+
 function createMemoryGroupRepository(userRepository) {
   let nextGroupId = 1;
   const contacts = [];
@@ -172,8 +176,10 @@ function createMemoryGroupRepository(userRepository) {
       memberIds.forEach((memberId) => {
         const existing = members.find((member) => member.groupId === Number(groupId) && member.userId === Number(memberId));
         if (existing) {
+          if (existing.removedAt) {
+            existing.role = 'member';
+          }
           existing.removedAt = null;
-          existing.role = 'member';
         } else {
           members.push({ groupId: Number(groupId), userId: Number(memberId), role: 'member', removedAt: null });
         }
@@ -360,18 +366,23 @@ function createPostgresGroupRepository(query = db.query, transaction = db.transa
       return hydrateGroup(rows[0]);
     },
     async addMembers(groupId, memberIds) {
-      await Promise.all(memberIds.map((memberId) =>
-        query(
-          `
-            INSERT INTO group_members (group_id, user_id, role, removed_at)
-            VALUES ($1, $2, 'member', NULL)
-            ON CONFLICT (group_id, user_id) DO UPDATE
-            SET role = 'member',
-                removed_at = NULL
-          `,
-          [groupId, memberId]
-        )
-      ));
+      await transaction(async (client) => {
+        await Promise.all(memberIds.map((memberId) =>
+          client.query(
+            `
+              INSERT INTO group_members (group_id, user_id, role, removed_at)
+              VALUES ($1, $2, 'member', NULL)
+              ON CONFLICT (group_id, user_id) DO UPDATE
+              SET role = CASE
+                    WHEN group_members.removed_at IS NOT NULL THEN 'member'
+                    ELSE group_members.role
+                  END,
+                  removed_at = NULL
+            `,
+            [groupId, memberId]
+          )
+        ));
+      });
       return this.findGroupById(groupId);
     },
     async removeMember(groupId, userId) {
@@ -412,6 +423,7 @@ function createGroupService(options = {}) {
     (options.userRepository && !process.env.TEST_DATABASE_URL
       ? createMemoryGroupRepository(options.userRepository)
       : createPostgresGroupRepository(options.query, options.transaction));
+  const groupCodeGenerator = options.groupCodeGenerator || generateGroupCode;
 
   async function addContact(userId, account) {
     const contact = await repository.findActiveUserByAccount(account);
@@ -440,24 +452,28 @@ function createGroupService(options = {}) {
       throw new GroupServiceError(GROUP_MEMBER_NOT_FOUND_MESSAGE, 404);
     }
 
-    let groupCode;
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      groupCode = generateGroupCode();
-      if (!(await repository.groupCodeExists(groupCode))) {
-        break;
+      const groupCode = groupCodeGenerator();
+      if (await repository.groupCodeExists(groupCode)) {
+        continue;
       }
-      groupCode = null;
-    }
-    if (!groupCode) {
-      throw new GroupServiceError('Could not generate group code', 500);
+
+      try {
+        return mapGroup(await repository.createGroup({
+          groupCode,
+          name: normalizeName(name),
+          ownerId: Number(userId),
+          memberIds: selectedIds
+        }));
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          continue;
+        }
+        throw error;
+      }
     }
 
-    return mapGroup(await repository.createGroup({
-      groupCode,
-      name: normalizeName(name),
-      ownerId: Number(userId),
-      memberIds: selectedIds
-    }));
+    throw new GroupServiceError('Could not generate group code', 500);
   }
 
   async function getGroup(userId, groupId) {
