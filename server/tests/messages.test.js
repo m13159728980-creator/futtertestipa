@@ -163,6 +163,59 @@ test('unrelated users cannot mark private messages delivered or read', async () 
   await expect(service.markRead(message.id, 3)).rejects.toMatchObject({ statusCode: 403 });
 });
 
+test('sender cannot mark their own private message delivered', async () => {
+  const { service } = createService();
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'receipt'
+  });
+
+  await expect(service.markDelivered(message.id, 1)).rejects.toMatchObject({
+    name: 'MessageServiceError',
+    statusCode: 403
+  });
+});
+
+test('sender cannot mark their own private message read', async () => {
+  const { service } = createService();
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'receipt'
+  });
+
+  await expect(service.markRead(message.id, 1)).rejects.toMatchObject({
+    name: 'MessageServiceError',
+    statusCode: 403
+  });
+});
+
+test('private recipient can mark delivered and read', async () => {
+  const { service } = createService();
+  const delivered = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'delivered'
+  });
+  const read = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'read'
+  });
+
+  await expect(service.markDelivered(delivered.message.id, 2)).resolves.toMatchObject({
+    message: expect.objectContaining({ status: 'delivered' })
+  });
+  await expect(service.markRead(read.message.id, 2)).resolves.toMatchObject({
+    message: expect.objectContaining({ status: 'read' })
+  });
+});
+
 test('unrelated users cannot read group messages', async () => {
   const { repository, service } = createService();
   repository.setGroupMembers(10, [

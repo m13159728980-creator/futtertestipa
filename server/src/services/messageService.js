@@ -452,6 +452,20 @@ function createMessageService(options = {}) {
     }
   }
 
+  async function requireRecipientOrGroupMember(message, userId) {
+    const actorId = Number(userId);
+    if (message.toType === 'user') {
+      if (message.toId !== actorId) {
+        throw new MessageServiceError('Message access denied', 403);
+      }
+      return;
+    }
+
+    if (!(await repository.isActiveGroupMember(message.toId, actorId))) {
+      throw new MessageServiceError('Message access denied', 403);
+    }
+  }
+
   async function createMessage(fromId, input) {
     const data = normalizeMessageInput(fromId, input, now);
     if (data.toType === 'group') {
@@ -468,7 +482,7 @@ function createMessageService(options = {}) {
 
   async function markDelivered(messageId, userId) {
     const existing = await requireActiveMessage(messageId);
-    await requireParticipant(existing, userId);
+    await requireRecipientOrGroupMember(existing, userId);
     const message = await repository.markDelivered(messageId);
     if (!message) {
       throw new MessageServiceError('Message not found', 404);
@@ -478,7 +492,7 @@ function createMessageService(options = {}) {
 
   async function markRead(messageId, userId) {
     const existing = await requireActiveMessage(messageId);
-    await requireParticipant(existing, userId);
+    await requireRecipientOrGroupMember(existing, userId);
     const message = await repository.markRead(messageId, Number(userId), now());
     if (!message) {
       throw new MessageServiceError('Message not found', 404);
