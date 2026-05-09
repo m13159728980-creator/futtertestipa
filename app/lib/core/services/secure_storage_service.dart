@@ -61,13 +61,11 @@ class FlutterSecureStorageService implements SecureStorageService {
   @override
   Future<String> ensureMasterKey() async {
     final existing = await readMasterKey();
-    if (existing != null) {
+    if (existing != null && _isValidMasterKey(existing)) {
       return existing;
     }
 
-    final random = Random.secure();
-    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
-    final key = base64Encode(bytes);
+    final key = _generateMasterKey();
     await _storage.write(key: _masterKeyKey, value: key);
     return key;
   }
@@ -76,11 +74,15 @@ class FlutterSecureStorageService implements SecureStorageService {
   Future<void> clear() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
+    await _storage.delete(key: _masterKeyKey);
   }
 }
 
 class InMemorySecureStorage implements SecureStorageService {
-  final Map<String, String> _values = {};
+  InMemorySecureStorage({Map<String, String>? initialValues})
+    : _values = {...?initialValues};
+
+  final Map<String, String> _values;
 
   @override
   Future<String?> readToken() async => _values['auth_token'];
@@ -103,10 +105,10 @@ class InMemorySecureStorage implements SecureStorageService {
   @override
   Future<String> ensureMasterKey() async {
     final existing = await readMasterKey();
-    if (existing != null) {
+    if (existing != null && _isValidMasterKey(existing)) {
       return existing;
     }
-    final key = base64Encode(List<int>.generate(32, (index) => index));
+    final key = _generateMasterKey();
     _values['master_key'] = key;
     return key;
   }
@@ -115,5 +117,20 @@ class InMemorySecureStorage implements SecureStorageService {
   Future<void> clear() async {
     _values.remove('auth_token');
     _values.remove('auth_user');
+    _values.remove('master_key');
   }
+}
+
+bool _isValidMasterKey(String key) {
+  try {
+    return base64Decode(key).length == 32;
+  } on FormatException {
+    return false;
+  }
+}
+
+String _generateMasterKey() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+  return base64Encode(bytes);
 }
