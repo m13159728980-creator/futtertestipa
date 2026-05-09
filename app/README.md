@@ -1,17 +1,15 @@
-# app
+# Private Chat Flutter 客户端
 
-A new Flutter project.
+这是 Private Chat 的 Flutter 客户端脚手架，当前包含 Android 工程、基础依赖、应用配置入口和账号校验工具。
 
-## Getting Started
+## 开发
 
-This project is a starting point for a Flutter application.
+```powershell
+$flutterBin = Join-Path $env:USERPROFILE 'flutter\bin'
+$env:Path = "$flutterBin;" + [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+flutter pub get
+flutter test
+flutter analyze
+```
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+后续聊天、登录、存储和实时通信界面将在此工程中逐步实现。
