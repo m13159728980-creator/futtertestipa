@@ -21,7 +21,7 @@ void main() {
             isA<ApiException>().having(
               (error) => error.message,
               'message',
-              '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯',
+              '请求失败，请稍后重试',
             ),
           ),
         );
@@ -44,7 +44,7 @@ void main() {
             isA<ApiException>().having(
               (error) => error.message,
               'message',
-              '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯',
+              '请求失败，请稍后重试',
             ),
           ),
         );
@@ -67,7 +67,7 @@ void main() {
             isA<ApiException>().having(
               (error) => error.message,
               'message',
-              '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯',
+              '请求失败，请稍后重试',
             ),
           ),
         );

@@ -31,7 +31,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-const _fallbackErrorMessage = '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯';
+const _fallbackErrorMessage = '请求失败，请稍后重试';
 
 class HttpApiService implements ApiService {
   HttpApiService({http.Client? client, String baseUrl = AppConfig.apiBaseUrl})
