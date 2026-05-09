@@ -10,14 +10,21 @@ DB_USER="${DB_USER:-chat_user}"
 DB_PASSWORD="${CHAT_DB_PASSWORD:-chat_password_change_me}"
 FORCE_DB_PASSWORD_UPDATE="${FORCE_DB_PASSWORD_UPDATE:-0}"
 
-if ! [[ "$DB_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-  echo "DB_NAME must match ^[A-Za-z_][A-Za-z0-9_]*$" >&2
+if ! [[ "$DB_NAME" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+  echo "DB_NAME must match ^[a-z_][a-z0-9_]*$" >&2
   exit 1
 fi
-if ! [[ "$DB_USER" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-  echo "DB_USER must match ^[A-Za-z_][A-Za-z0-9_]*$" >&2
+if ! [[ "$DB_USER" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+  echo "DB_USER must match ^[a-z_][a-z0-9_]*$" >&2
   exit 1
 fi
+
+validate_db_password() {
+  if ! [[ "$1" =~ ^[A-Za-z0-9_.~-]+$ ]]; then
+    echo "DB_PASSWORD must match ^[A-Za-z0-9_.~-]+$ for DATABASE_URL safety" >&2
+    exit 1
+  fi
+}
 
 sql_literal() {
   printf "'%s'" "${1//\'/\'\'}"
@@ -53,6 +60,7 @@ rsync -a --delete \
 
 cd "$APP_DIR"
 if [ ! -f "$APP_DIR/.env" ]; then
+  validate_db_password "$DB_PASSWORD"
   cp "$APP_DIR/.env.example" "$APP_DIR/.env"
   {
     echo "DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
@@ -62,9 +70,12 @@ if [ ! -f "$APP_DIR/.env" ]; then
 else
   existing_db_password="$(extract_database_url_password "$APP_DIR/.env")"
   if [ -z "${CHAT_DB_PASSWORD:-}" ] && [ -n "$existing_db_password" ]; then
+    validate_db_password "$existing_db_password"
     DB_PASSWORD="$existing_db_password"
   fi
 fi
+
+validate_db_password "$DB_PASSWORD"
 
 db_user_literal="$(sql_literal "$DB_USER")"
 db_name_literal="$(sql_literal "$DB_NAME")"

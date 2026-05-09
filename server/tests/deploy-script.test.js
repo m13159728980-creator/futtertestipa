@@ -37,14 +37,22 @@ test('deploy.sh provisions PostgreSQL database and user before migrations', () =
   expect(script).toContain('DB_USER="${DB_USER:-chat_user}"');
   expect(script).toContain('DB_PASSWORD="${CHAT_DB_PASSWORD:-chat_password_change_me}"');
   expect(script).toContain('sudo -u postgres psql');
-  expect(script).toContain('[[ "$DB_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]');
-  expect(script).toContain('[[ "$DB_USER" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]');
+  expect(script).toContain('[[ "$DB_NAME" =~ ^[a-z_][a-z0-9_]*$ ]]');
+  expect(script).toContain('[[ "$DB_USER" =~ ^[a-z_][a-z0-9_]*$ ]]');
   expect(script).toContain('sql_literal()');
   expect(script).toContain('CREATE ROLE');
   expect(script).toContain('CREATE DATABASE');
   expect(script).toContain('ALTER DATABASE');
   expect(databaseSetupIndex).toBeGreaterThan(-1);
   expect(migrationIndex).toBeGreaterThan(databaseSetupIndex);
+});
+
+test('deploy.sh rejects uppercase database identifiers because it uses unquoted PostgreSQL identifiers', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+
+  expect(script).not.toContain('^[A-Za-z_][A-Za-z0-9_]*$');
+  expect(script).toContain('DB_NAME must match ^[a-z_][a-z0-9_]*$');
+  expect(script).toContain('DB_USER must match ^[a-z_][a-z0-9_]*$');
 });
 
 test('deploy.sh avoids psql variables inside dollar-quoted SQL blocks', () => {
@@ -76,6 +84,16 @@ test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', 
   expect(script).toContain('existing_db_password="$(extract_database_url_password "$APP_DIR/.env")"');
   expect(script).toContain('if [ -z "${CHAT_DB_PASSWORD:-}" ] && [ -n "$existing_db_password" ]; then');
   expect(script).toContain('DB_PASSWORD="$existing_db_password"');
+});
+
+test('deploy.sh validates database passwords are URL-safe before writing or reusing DATABASE_URL', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+
+  expect(script).toContain('validate_db_password()');
+  expect(script).toContain('[[ "$1" =~ ^[A-Za-z0-9_.~-]+$ ]]');
+  expect(script).toContain('DB_PASSWORD must match ^[A-Za-z0-9_.~-]+$ for DATABASE_URL safety');
+  expect(script).toContain('validate_db_password "$DB_PASSWORD"');
+  expect(script).toContain('validate_db_password "$existing_db_password"');
 });
 
 test('.env.example documents required deployment defaults', () => {
