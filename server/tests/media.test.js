@@ -74,6 +74,12 @@ async function register(app, account = '@MEDIA') {
   return res.body;
 }
 
+function bufferResponse(res, callback) {
+  const chunks = [];
+  res.on('data', (chunk) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+}
+
 test('media service rejects files larger than 50 MB', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'media-large-'));
   const tempFile = path.join(tempDir, 'large.bin');
@@ -163,6 +169,24 @@ test('GET /api/stickers returns default official sticker pack metadata', async (
   for (const pack of res.body.packs) {
     expect(pack.manifest.stickers).toHaveLength(16);
   }
+});
+
+test.each(['pack1', 'pack2', 'pack3'])('GET /stickers/%s.zip downloads default sticker pack placeholder', async (slug) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stickers-default-'));
+  const app = createApp({
+    userRepository: createMemoryUserRepository(),
+    storagePath: tempDir
+  });
+
+  const res = await request(app)
+    .get(`/stickers/${slug}.zip`)
+    .buffer(true)
+    .parse(bufferResponse);
+
+  expect(res.status).toBe(200);
+  expect(res.headers['content-type']).toMatch(/application\/zip|application\/octet-stream/);
+  expect(Buffer.isBuffer(res.body)).toBe(true);
+  expect(res.body.length).toBeGreaterThan(0);
 });
 
 test('account deletion marks deletion, increments token version, records purge, and releases account checks', async () => {

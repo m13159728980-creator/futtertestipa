@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const { Router } = require('express');
 const config = require('../config');
@@ -40,6 +41,9 @@ const DEFAULT_PACKS = [
     official: true
   }
 ];
+
+const EMPTY_ZIP_BUFFER = Buffer.from('504b0506000000000000000000000000000000000000', 'hex');
+const DEFAULT_PACK_SLUGS = new Set(DEFAULT_PACKS.map((pack) => pack.slug));
 
 function normalizePack(row) {
   return {
@@ -89,6 +93,12 @@ function createStickerRoutes(options = {}) {
     return filePath;
   }
 
+  function sendDefaultPackPlaceholder(res, slug) {
+    res.type('application/zip');
+    res.attachment(`${slug}.zip`);
+    return res.send(EMPTY_ZIP_BUFFER);
+  }
+
   router.get('/stickers/:pack.zip', async (req, res, next) => {
     const slug = String(req.params.pack || '');
     try {
@@ -100,6 +110,10 @@ function createStickerRoutes(options = {}) {
       const filePath = safeStickerPath(pack);
       if (!filePath) {
         return res.status(403).json({ message: 'Unsafe sticker path' });
+      }
+
+      if (DEFAULT_PACK_SLUGS.has(slug) && !fs.existsSync(filePath)) {
+        return sendDefaultPackPlaceholder(res, slug);
       }
 
       return res.download(filePath, `${slug}.zip`, (error) => {
