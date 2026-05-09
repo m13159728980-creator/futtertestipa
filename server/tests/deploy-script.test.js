@@ -37,11 +37,31 @@ test('deploy.sh provisions PostgreSQL database and user before migrations', () =
   expect(script).toContain('DB_USER="${DB_USER:-chat_user}"');
   expect(script).toContain('DB_PASSWORD="${CHAT_DB_PASSWORD:-chat_password_change_me}"');
   expect(script).toContain('sudo -u postgres psql');
+  expect(script).toContain('[[ "$DB_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]');
+  expect(script).toContain('[[ "$DB_USER" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]');
+  expect(script).toContain('sql_literal()');
   expect(script).toContain('CREATE ROLE');
   expect(script).toContain('CREATE DATABASE');
   expect(script).toContain('ALTER DATABASE');
   expect(databaseSetupIndex).toBeGreaterThan(-1);
   expect(migrationIndex).toBeGreaterThan(databaseSetupIndex);
+});
+
+test('deploy.sh avoids psql variables inside dollar-quoted SQL blocks', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+
+  expect(script).not.toContain('DO $$');
+  expect(script).not.toContain(":'db_user'");
+  expect(script).not.toContain(':"db_name"');
+  expect(script).not.toMatch(/<<'?SQL'?/);
+});
+
+test('deploy.sh does not reset existing database role password by default', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+
+  expect(script).toContain('FORCE_DB_PASSWORD_UPDATE="${FORCE_DB_PASSWORD_UPDATE:-0}"');
+  expect(script).toContain('if [ "$FORCE_DB_PASSWORD_UPDATE" = "1" ] && [ -n "${CHAT_DB_PASSWORD:-}" ]; then');
+  expect(script).not.toMatch(/ELSE\s+[\s\S]*ALTER ROLE[\s\S]*PASSWORD/);
 });
 
 test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', () => {
@@ -52,6 +72,10 @@ test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', 
   expect(script).toContain('if [ ! -f "$APP_DIR/.env" ]; then');
   expect(script).toContain('cp "$APP_DIR/.env.example" "$APP_DIR/.env"');
   expect(script).toContain('DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}');
+  expect(script).toContain('extract_database_url_password()');
+  expect(script).toContain('existing_db_password="$(extract_database_url_password "$APP_DIR/.env")"');
+  expect(script).toContain('if [ -z "${CHAT_DB_PASSWORD:-}" ] && [ -n "$existing_db_password" ]; then');
+  expect(script).toContain('DB_PASSWORD="$existing_db_password"');
 });
 
 test('.env.example documents required deployment defaults', () => {

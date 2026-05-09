@@ -8,6 +8,29 @@ REPO_DIR="${REPO_DIR:-$(pwd)}"
 DB_NAME="${DB_NAME:-private_chat}"
 DB_USER="${DB_USER:-chat_user}"
 DB_PASSWORD="${CHAT_DB_PASSWORD:-chat_password_change_me}"
+FORCE_DB_PASSWORD_UPDATE="${FORCE_DB_PASSWORD_UPDATE:-0}"
+
+if ! [[ "$DB_NAME" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  echo "DB_NAME must match ^[A-Za-z_][A-Za-z0-9_]*$" >&2
+  exit 1
+fi
+if ! [[ "$DB_USER" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  echo "DB_USER must match ^[A-Za-z_][A-Za-z0-9_]*$" >&2
+  exit 1
+fi
+
+sql_literal() {
+  printf "'%s'" "${1//\'/\'\'}"
+}
+
+extract_database_url_password() {
+  local env_file="$1"
+  local database_url
+  database_url="$(grep -E '^DATABASE_URL=' "$env_file" | tail -n 1 | cut -d= -f2- || true)"
+  if [[ "$database_url" =~ ^postgres://[^:]+:([^@]+)@ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
 
 if ! command -v apt-get >/dev/null 2>&1; then
   echo "This deployment script expects an Ubuntu/Debian host with apt-get." >&2
@@ -36,32 +59,27 @@ if [ ! -f "$APP_DIR/.env" ]; then
     echo "STORAGE_PATH=${APP_DIR}/storage"
   } >>"$APP_DIR/.env"
   chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
+else
+  existing_db_password="$(extract_database_url_password "$APP_DIR/.env")"
+  if [ -z "${CHAT_DB_PASSWORD:-}" ] && [ -n "$existing_db_password" ]; then
+    DB_PASSWORD="$existing_db_password"
+  fi
 fi
 
-sudo -u postgres psql -v ON_ERROR_STOP=1 \
-  -v db_user="$DB_USER" \
-  -v db_password="$DB_PASSWORD" <<'SQL'
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = :'db_user') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'db_user', :'db_password');
-  ELSE
-    EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'db_user', :'db_password');
-  END IF;
-END
-$$;
-SQL
+db_user_literal="$(sql_literal "$DB_USER")"
+db_name_literal="$(sql_literal "$DB_NAME")"
+db_password_literal="$(sql_literal "$DB_PASSWORD")"
 
-if ! sudo -u postgres psql -v db_name="$DB_NAME" -tAc "SELECT 1 FROM pg_database WHERE datname = :'db_name'" | grep -q 1; then
-  sudo -u postgres psql -v ON_ERROR_STOP=1 \
-    -v db_name="$DB_NAME" \
-    -v db_user="$DB_USER" \
-    -c 'CREATE DATABASE :"db_name" OWNER :"db_user";'
+if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname=${db_user_literal}" | grep -q 1; then
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE ${DB_USER} LOGIN PASSWORD ${db_password_literal};"
+elif [ "$FORCE_DB_PASSWORD_UPDATE" = "1" ] && [ -n "${CHAT_DB_PASSWORD:-}" ]; then
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE ${DB_USER} LOGIN PASSWORD ${db_password_literal};"
 fi
-sudo -u postgres psql -v ON_ERROR_STOP=1 \
-  -v db_name="$DB_NAME" \
-  -v db_user="$DB_USER" \
-  -c 'ALTER DATABASE :"db_name" OWNER TO :"db_user";'
+
+if ! sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname=${db_name_literal}" | grep -q 1; then
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
+fi
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};"
 
 npm install
 npm run migrate
