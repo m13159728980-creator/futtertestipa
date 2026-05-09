@@ -13,6 +13,7 @@ abstract interface class MessageStore {
   Future<List<Map<String, Object?>>> listByConversation({
     required ConversationType toType,
     required String peerId,
+    String? currentUserId,
   });
 
   Future<Map<String, Object?>?> getById(String id);
@@ -58,10 +59,12 @@ class LocalDatabaseService {
   Future<List<Message>> listMessages({
     required ConversationType toType,
     required String peerId,
+    String? currentUserId,
   }) async {
     final rows = await _store.listByConversation(
       toType: toType,
       peerId: peerId,
+      currentUserId: currentUserId,
     );
     return Future.wait(rows.map(_messageFromRow));
   }
@@ -156,7 +159,18 @@ class SqfliteMessageStore implements MessageStore {
   Future<List<Map<String, Object?>>> listByConversation({
     required ConversationType toType,
     required String peerId,
+    String? currentUserId,
   }) {
+    if (toType == ConversationType.user && currentUserId != null) {
+      return _db.query(
+        'messages',
+        where:
+            'to_type = ? AND ((from_id = ? AND to_id = ?) OR '
+            '(from_id = ? AND to_id = ?))',
+        whereArgs: [toType.name, currentUserId, peerId, peerId, currentUserId],
+        orderBy: 'timestamp ASC',
+      );
+    }
     return _db.query(
       'messages',
       where: 'to_type = ? AND to_id = ?',
@@ -225,12 +239,18 @@ class InMemoryMessageStore implements MessageStore {
   Future<List<Map<String, Object?>>> listByConversation({
     required ConversationType toType,
     required String peerId,
+    String? currentUserId,
   }) async {
     _checkOpen();
     final rows =
         _messages.values
             .where(
-              (row) => row['to_type'] == toType.name && row['to_id'] == peerId,
+              (row) => _matchesConversation(
+                row,
+                toType: toType,
+                peerId: peerId,
+                currentUserId: currentUserId,
+              ),
             )
             .map(Map<String, Object?>.from)
             .toList()
@@ -239,6 +259,22 @@ class InMemoryMessageStore implements MessageStore {
                 (left['timestamp'] as int).compareTo(right['timestamp'] as int),
           );
     return rows;
+  }
+
+  bool _matchesConversation(
+    Map<String, Object?> row, {
+    required ConversationType toType,
+    required String peerId,
+    required String? currentUserId,
+  }) {
+    if (row['to_type'] != toType.name) {
+      return false;
+    }
+    if (toType != ConversationType.user || currentUserId == null) {
+      return row['to_id'] == peerId;
+    }
+    return (row['from_id'] == currentUserId && row['to_id'] == peerId) ||
+        (row['from_id'] == peerId && row['to_id'] == currentUserId);
   }
 
   @override

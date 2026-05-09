@@ -3,7 +3,8 @@ enum ConversationType {
   group;
 
   static ConversationType fromJson(Object? value) {
-    return ConversationType.values.byName(value?.toString() ?? 'user');
+    return _enumByNameOrNull(ConversationType.values, value) ??
+        ConversationType.user;
   }
 }
 
@@ -15,7 +16,7 @@ enum MessageType {
   burn;
 
   static MessageType fromJson(Object? value) {
-    return MessageType.values.byName(value?.toString() ?? 'text');
+    return _enumByNameOrNull(MessageType.values, value) ?? MessageType.text;
   }
 }
 
@@ -27,7 +28,7 @@ enum MessageStatus {
   revoked;
 
   static MessageStatus fromJson(Object? value) {
-    return MessageStatus.values.byName(value?.toString() ?? 'sent');
+    return _enumByNameOrNull(MessageStatus.values, value) ?? MessageStatus.sent;
   }
 }
 
@@ -63,9 +64,10 @@ class Message {
       toId: (json['toId'] ?? json['to_id']).toString(),
       toType: ConversationType.fromJson(json['toType'] ?? json['to_type']),
       type: MessageType.fromJson(json['type']),
-      content: json['content'] as String?,
-      encryptedContent:
-          (json['encryptedContent'] ?? json['encrypted_content']) as String?,
+      content: _stringOrNull(json['content']),
+      encryptedContent: _stringOrNull(
+        json['encryptedContent'] ?? json['encrypted_content'],
+      ),
       timestamp: _parseTimestamp(json['timestamp']),
       burnAfter: _parseBurnAfter(json['burnAfter'] ?? json['burn_after']),
       status: MessageStatus.fromJson(json['status']),
@@ -112,9 +114,27 @@ DateTime _parseTimestamp(Object? value) {
     return value.toUtc();
   }
   if (value is int) {
-    return DateTime.fromMillisecondsSinceEpoch(value, isUtc: true);
+    final milliseconds = value < 1000000000000 ? value * 1000 : value;
+    return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
   }
   return DateTime.parse(value.toString()).toUtc();
+}
+
+String? _stringOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return value.toString();
+}
+
+T? _enumByNameOrNull<T extends Enum>(List<T> values, Object? value) {
+  final name = value?.toString();
+  for (final enumValue in values) {
+    if (enumValue.name == name) {
+      return enumValue;
+    }
+  }
+  return null;
 }
 
 Duration? _parseBurnAfter(Object? value) {

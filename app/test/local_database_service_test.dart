@@ -45,6 +45,7 @@ void main() {
       final messages = await database.listMessages(
         toType: ConversationType.user,
         peerId: 'bob',
+        currentUserId: 'alice',
       );
 
       expect(messages, hasLength(1));
@@ -52,17 +53,33 @@ void main() {
     },
   );
 
-  test('lists only messages for the requested conversation', () async {
+  test('lists both directions for the requested direct conversation', () async {
     await database.upsertMessage(
       _message(id: 'direct-1', fromId: 'alice', toId: 'bob', content: 'one'),
     );
     await database.upsertMessage(
-      _message(id: 'direct-2', fromId: 'alice', toId: 'carol', content: 'two'),
+      _message(id: 'direct-2', fromId: 'bob', toId: 'alice', content: 'two'),
+    );
+    await database.upsertMessage(
+      _message(
+        id: 'direct-3',
+        fromId: 'alice',
+        toId: 'carol',
+        content: 'carol',
+      ),
+    );
+    await database.upsertMessage(
+      _message(
+        id: 'direct-4',
+        fromId: 'carol',
+        toId: 'alice',
+        content: 'carol inbound',
+      ),
     );
     await database.upsertMessage(
       _message(
         id: 'group-1',
-        fromId: 'alice',
+        fromId: 'bob',
         toId: 'bob',
         toType: ConversationType.group,
         content: 'group',
@@ -72,9 +89,109 @@ void main() {
     final messages = await database.listMessages(
       toType: ConversationType.user,
       peerId: 'bob',
+      currentUserId: 'alice',
     );
 
-    expect(messages.map((message) => message.id), ['direct-1']);
+    expect(messages.map((message) => message.id), ['direct-1', 'direct-2']);
+  });
+
+  test('lists group messages by group id only', () async {
+    await database.upsertMessage(
+      _message(
+        id: 'direct-1',
+        fromId: 'alice',
+        toId: 'team',
+        content: 'not group',
+      ),
+    );
+    await database.upsertMessage(
+      _message(
+        id: 'group-1',
+        fromId: 'alice',
+        toId: 'team',
+        toType: ConversationType.group,
+        content: 'group one',
+      ),
+    );
+    await database.upsertMessage(
+      _message(
+        id: 'group-2',
+        fromId: 'bob',
+        toId: 'team',
+        toType: ConversationType.group,
+        content: 'group two',
+      ),
+    );
+    await database.upsertMessage(
+      _message(
+        id: 'other-group',
+        fromId: 'bob',
+        toId: 'other-team',
+        toType: ConversationType.group,
+        content: 'other',
+      ),
+    );
+
+    final messages = await database.listMessages(
+      toType: ConversationType.group,
+      peerId: 'team',
+      currentUserId: 'alice',
+    );
+
+    expect(messages.map((message) => message.id), ['group-1', 'group-2']);
+  });
+
+  test('upserts existing messages by id', () async {
+    await database.upsertMessage(
+      _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'old'),
+    );
+    await database.upsertMessage(
+      _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'new'),
+    );
+
+    final messages = await database.listMessages(
+      toType: ConversationType.user,
+      peerId: 'bob',
+      currentUserId: 'alice',
+    );
+
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'new');
+  });
+
+  test('deletes messages by id', () async {
+    await database.upsertMessage(
+      _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'one'),
+    );
+    await database.upsertMessage(
+      _message(id: 'm2', fromId: 'bob', toId: 'alice', content: 'two'),
+    );
+
+    await database.deleteMessage('m1');
+
+    final messages = await database.listMessages(
+      toType: ConversationType.user,
+      peerId: 'bob',
+      currentUserId: 'alice',
+    );
+
+    expect(messages.map((message) => message.id), ['m2']);
+  });
+
+  test('marks messages as burned', () async {
+    await database.upsertMessage(
+      _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'one'),
+    );
+
+    await database.markBurned('m1');
+
+    final messages = await database.listMessages(
+      toType: ConversationType.user,
+      peerId: 'bob',
+      currentUserId: 'alice',
+    );
+
+    expect(messages.single.status, MessageStatus.burned);
   });
 }
 
