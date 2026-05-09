@@ -16,6 +16,15 @@ void main() {
     expect(_submitButton(tester).onPressed, isNull);
   });
 
+  testWidgets('blank name shows exactly 请输入名字', (tester) async {
+    await tester.pumpWidget(_testApp());
+
+    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
+    await tester.pump();
+
+    expect(find.text('请输入名字'), findsOneWidget);
+  });
+
   testWidgets('invalid account disables submit button', (tester) async {
     await tester.pumpWidget(_testApp());
 

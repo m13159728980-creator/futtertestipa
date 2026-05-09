@@ -55,7 +55,9 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
               controller: _nameController,
               decoration: InputDecoration(
                 labelText: '名字',
-                errorText: _submitted || _nameController.text.isNotEmpty
+                errorText: _submitted ||
+                        _nameController.text.isNotEmpty ||
+                        _accountController.text.isNotEmpty
                     ? nameError
                     : null,
               ),
