@@ -226,6 +226,20 @@ test('DELETE /api/users/me rejects missing confirmation', async () => {
   expect(res.body).toEqual({ message: '请输入正确账号确认注销' });
 });
 
+test('DELETE /api/users/me rejects request with no body', async () => {
+  const app = createTestApp();
+  const registerRes = await request(app)
+    .post('/api/auth/register')
+    .send({ account: '@ZCMX', displayName: 'ZCMX' });
+
+  const res = await request(app)
+    .delete('/api/users/me')
+    .set('Authorization', `Bearer ${registerRes.body.token}`);
+
+  expect(res.status).toBe(400);
+  expect(res.body).toEqual({ message: '请输入正确账号确认注销' });
+});
+
 test('DELETE /api/users/me rejects wrong confirmation', async () => {
   const app = createTestApp();
   const registerRes = await request(app)

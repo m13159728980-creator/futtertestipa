@@ -30,7 +30,7 @@ function createUserRoutes({ authMiddleware, userService }) {
 
   router.delete('/api/users/me', authMiddleware, async (req, res, next) => {
     try {
-      await userService.softDelete(req.user.id, req.body.account);
+      await userService.softDelete(req.user.id, req.body?.account);
       res.status(204).send();
     } catch (error) {
       if (error instanceof UserServiceError) {
