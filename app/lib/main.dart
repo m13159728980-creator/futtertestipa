@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/themes/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/settings_provider.dart';
 import 'screens/chat_list_screen.dart';
 import 'screens/create_account_screen.dart';
 
@@ -12,15 +13,19 @@ void main() {
   runApp(const ProviderScope(child: PrivateChatApp()));
 }
 
-class PrivateChatApp extends StatelessWidget {
+class PrivateChatApp extends ConsumerWidget {
   const PrivateChatApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider).settings;
+
     return MaterialApp(
       title: 'Private Chat',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: settings.themeMode,
+      locale: Locale(settings.languageCode),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

@@ -1,4 +1,5 @@
 import 'package:app/providers/auth_provider.dart';
+import 'package:app/screens/settings_screen.dart';
 import 'package:app/widgets/default_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +17,9 @@ class ChatListScreen extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: '设置',
-            onPressed: () {},
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+            ),
             icon: const Icon(Icons.settings),
           ),
         ],
