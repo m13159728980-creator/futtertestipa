@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:app/core/services/secure_window_service.dart';
 import 'package:app/providers/auth_provider.dart';
+import 'package:app/providers/call_provider.dart';
 import 'package:app/providers/group_provider.dart';
+import 'package:app/screens/call_screen.dart';
 import 'package:app/widgets/burn_mode_menu.dart';
 import 'package:app/widgets/chat_bubble.dart';
 import 'package:app/widgets/message_composer.dart';
@@ -63,6 +65,24 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Start group call',
+            onPressed: () async {
+              final memberIds = group.memberNames.keys
+                  .where((id) => id != currentUserId)
+                  .take(CallProvider.maxParticipants - 1)
+                  .toList();
+              await ref
+                  .read(callProvider)
+                  .startGroupCall(peerIds: memberIds, groupName: group.name);
+              if (context.mounted) {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+                );
+              }
+            },
+            icon: const Icon(Icons.call),
+          ),
           BurnModeMenu(selected: _burnAfter, onSelected: _setBurnAfter),
         ],
       ),

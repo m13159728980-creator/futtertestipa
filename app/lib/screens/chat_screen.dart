@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:app/core/services/secure_window_service.dart';
 import 'package:app/models/message.dart';
 import 'package:app/providers/auth_provider.dart';
+import 'package:app/providers/call_provider.dart';
 import 'package:app/providers/chat_provider.dart';
+import 'package:app/screens/call_screen.dart';
 import 'package:app/widgets/burn_mode_menu.dart';
 import 'package:app/widgets/chat_bubble.dart';
 import 'package:app/widgets/message_composer.dart';
@@ -61,6 +63,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Start call',
+            onPressed: () async {
+              await ref
+                  .read(callProvider)
+                  .startOneToOneCall(peerId: widget.peerId, peerName: widget.title);
+              if (context.mounted) {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+                );
+              }
+            },
+            icon: const Icon(Icons.call),
+          ),
           BurnModeMenu(selected: _burnAfter, onSelected: _setBurnAfter),
         ],
       ),

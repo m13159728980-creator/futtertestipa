@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const { verifyToken } = require('../auth/token');
+const { createCallSignaling } = require('../webrtc/signaling');
 
 function parseMessage(raw) {
   try {
@@ -49,7 +50,17 @@ function createSocketServer({ server, messageService, userService, authenticateT
     }
   }
 
+  function isUserOnline(userId) {
+    const sockets = socketsByUserId.get(Number(userId));
+    return Boolean(sockets && sockets.size > 0);
+  }
+
+  const callSignaling = createCallSignaling({ broadcast, isUserOnline });
+
   async function handleAuthedEvent(socket, userId, event) {
+    if (callSignaling.handle(userId, event)) {
+      return;
+    }
     if (event.type === 'message.send') {
       const result = await messageService.createMessage(userId, event.payload || {});
       broadcast(result.targets, 'message.send', clientPayload(result));
@@ -119,6 +130,7 @@ function createSocketServer({ server, messageService, userService, authenticateT
     broadcast,
     clientPayload,
     handleConnection,
+    callSignaling,
     socketsByUserId,
     webSocketServer
   };
