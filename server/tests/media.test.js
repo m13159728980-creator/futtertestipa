@@ -134,6 +134,35 @@ test('GET /api/stickers/packs returns default official sticker pack metadata', a
     expect.objectContaining({ slug: 'pack2', downloadUrl: '/stickers/pack2.zip', name: expect.any(String), version: 1 }),
     expect.objectContaining({ slug: 'pack3', downloadUrl: '/stickers/pack3.zip', name: expect.any(String), version: 1 })
   ]);
+  for (const pack of res.body.packs) {
+    expect(pack.manifest.stickers).toHaveLength(16);
+    expect(pack.manifest.stickers).toEqual(
+      Array.from({ length: 16 }, (_, index) => {
+        const number = String(index + 1).padStart(2, '0');
+        return {
+          id: `${pack.slug}_${number}`,
+          remotePath: `/stickers/${pack.slug}/${number}.png`
+        };
+      })
+    );
+  }
+});
+
+test('GET /api/stickers returns default official sticker pack metadata', async () => {
+  const app = createApp({ userRepository: createMemoryUserRepository() });
+
+  const res = await request(app).get('/api/stickers');
+
+  expect(res.status).toBe(200);
+  expect(res.body.packs.map((pack) => pack.slug)).toEqual(['pack1', 'pack2', 'pack3']);
+  expect(res.body.packs.map((pack) => pack.manifest.stickers)).toEqual([
+    expect.arrayContaining([{ id: 'pack1_01', remotePath: '/stickers/pack1/01.png' }]),
+    expect.arrayContaining([{ id: 'pack2_16', remotePath: '/stickers/pack2/16.png' }]),
+    expect.arrayContaining([{ id: 'pack3_08', remotePath: '/stickers/pack3/08.png' }])
+  ]);
+  for (const pack of res.body.packs) {
+    expect(pack.manifest.stickers).toHaveLength(16);
+  }
 });
 
 test('account deletion marks deletion, increments token version, records purge, and releases account checks', async () => {

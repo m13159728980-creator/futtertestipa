@@ -2,13 +2,25 @@ const path = require('path');
 const { Router } = require('express');
 const config = require('../config');
 
+function buildDefaultManifest(slug) {
+  return {
+    stickers: Array.from({ length: 16 }, (_, index) => {
+      const number = String(index + 1).padStart(2, '0');
+      return {
+        id: `${slug}_${number}`,
+        remotePath: `/stickers/${slug}/${number}.png`
+      };
+    })
+  };
+}
+
 const DEFAULT_PACKS = [
   {
     slug: 'pack1',
     name: 'Gram Basics',
     version: 1,
     zipPath: 'pack1.zip',
-    manifest: { stickers: [] },
+    manifest: buildDefaultManifest('pack1'),
     official: true
   },
   {
@@ -16,7 +28,7 @@ const DEFAULT_PACKS = [
     name: 'Secure Mood',
     version: 1,
     zipPath: 'pack2.zip',
-    manifest: { stickers: [] },
+    manifest: buildDefaultManifest('pack2'),
     official: true
   },
   {
@@ -24,7 +36,7 @@ const DEFAULT_PACKS = [
     name: 'Daily Signals',
     version: 1,
     zipPath: 'pack3.zip',
-    manifest: { stickers: [] },
+    manifest: buildDefaultManifest('pack3'),
     official: true
   }
 ];
@@ -47,7 +59,7 @@ function createStickerRoutes(options = {}) {
   const stickerRoot = path.resolve(storagePath, 'stickers');
   const repository = options.stickerRepository;
 
-  router.get('/api/stickers/packs', async (req, res, next) => {
+  async function listPacks(req, res, next) {
     try {
       const packs = repository && repository.listActivePacks
         ? await repository.listActivePacks()
@@ -56,7 +68,10 @@ function createStickerRoutes(options = {}) {
     } catch (error) {
       next(error);
     }
-  });
+  }
+
+  router.get('/api/stickers', listPacks);
+  router.get('/api/stickers/packs', listPacks);
 
   async function findPackBySlug(slug) {
     if (repository && repository.findActivePackBySlug) {
