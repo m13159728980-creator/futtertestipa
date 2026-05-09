@@ -59,6 +59,9 @@ class WebSocketService {
   bool get isConnected => _channel != null;
 
   void connect({required String token}) {
+    if (_shouldReconnect && _token == token && _channel != null) {
+      return;
+    }
     _token = token;
     _shouldReconnect = true;
     _open();
@@ -72,10 +75,12 @@ class WebSocketService {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    await _subscription?.cancel();
+    final subscription = _subscription;
     _subscription = null;
-    await _channel?.sink.close();
+    final channel = _channel;
     _channel = null;
+    await subscription?.cancel();
+    await channel?.sink.close();
   }
 
   Future<void> dispose() async {

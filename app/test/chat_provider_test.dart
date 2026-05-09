@@ -1,13 +1,100 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
+import 'package:app/models/user.dart';
+import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/chat_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
+  test(
+    'chatProvider connects and authenticates websocket when auth user exists',
+    () async {
+      final user = _user(token: 'token-1');
+      final storage = InMemorySecureStorage();
+      await storage.saveSession(user);
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      final container = ProviderContainer(
+        overrides: [
+          apiServiceProvider.overrideWithValue(_FakeApiService(user)),
+          secureStorageServiceProvider.overrideWithValue(storage),
+          webSocketServiceProvider.overrideWithValue(webSocketService),
+          messageStoreProvider.overrideWithValue(InMemoryMessageStore()),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(webSocketService.dispose);
+
+      await container.read(authProvider).initialize();
+      container.read(chatProvider);
+
+      expect(socket.sentJson, [
+        {
+          'type': 'auth',
+          'payload': {'token': 'token-1'},
+        },
+      ]);
+    },
+  );
+
+  test('chatProvider disconnects and does not connect without auth user', () {
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'old-token');
+    final container = ProviderContainer(
+      overrides: [
+        apiServiceProvider.overrideWithValue(_FakeApiService(null)),
+        secureStorageServiceProvider.overrideWithValue(InMemorySecureStorage()),
+        webSocketServiceProvider.overrideWithValue(webSocketService),
+        messageStoreProvider.overrideWithValue(InMemoryMessageStore()),
+      ],
+    );
+    addTearDown(container.dispose);
+    addTearDown(webSocketService.dispose);
+
+    container.read(chatProvider);
+
+    expect(socket.sentJson, [
+      {
+        'type': 'auth',
+        'payload': {'token': 'old-token'},
+      },
+    ]);
+    expect(webSocketService.isConnected, isFalse);
+  });
+
+  test('WebSocketService ignores connect calls for the active token', () {
+    var connectCount = 0;
+    final socket = _FakeWebSocketChannel();
+    final service = WebSocketService(
+      connector: (_) {
+        connectCount += 1;
+        return socket;
+      },
+    );
+    addTearDown(service.dispose);
+
+    service.connect(token: 'token-1');
+    service.connect(token: 'token-1');
+
+    expect(connectCount, 1);
+    expect(socket.sentJson, [
+      {
+        'type': 'auth',
+        'payload': {'token': 'token-1'},
+      },
+    ]);
+  });
+
   test('loads group messages separately from direct messages', () async {
     final database = LocalDatabaseService(
       cryptoService: CryptoService(CryptoService.generateKey()),
@@ -229,6 +316,104 @@ void main() {
       secondContainer.dispose();
     },
   );
+}
+
+User _user({String token = 'token-1'}) {
+  return User(id: 'me', displayName: 'Me', account: '@Me', token: token);
+}
+
+class _FakeApiService implements ApiService {
+  const _FakeApiService(this.user);
+
+  final User? user;
+
+  @override
+  Future<User> register({
+    required String displayName,
+    required String account,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> validate(String token) async {
+    final currentUser = user;
+    if (currentUser == null) {
+      throw const ApiException('unauthenticated');
+    }
+    return currentUser.copyWith(token: token);
+  }
+
+  @override
+  Future<bool> checkAccount(String account) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteAccount({
+    required String token,
+    required String accountConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeWebSocketChannel implements WebSocketChannel {
+  final StreamController<dynamic> _incoming = StreamController<dynamic>();
+  final _FakeWebSocketSink _sink = _FakeWebSocketSink();
+
+  List<Map<String, dynamic>> get sentJson => _sink.sent
+      .map((source) => jsonDecode(source) as Map<String, dynamic>)
+      .toList();
+
+  @override
+  int? get closeCode => null;
+
+  @override
+  String? get closeReason => null;
+
+  @override
+  String? get protocol => null;
+
+  @override
+  Future<void> get ready => Future.value();
+
+  @override
+  WebSocketSink get sink => _sink;
+
+  @override
+  Stream<dynamic> get stream => _incoming.stream;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeWebSocketSink implements WebSocketSink {
+  final List<String> sent = [];
+  bool closed = false;
+
+  @override
+  void add(event) {
+    sent.add(event.toString());
+  }
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  Future addStream(Stream stream) async {
+    await for (final event in stream) {
+      add(event);
+    }
+  }
+
+  @override
+  Future close([int? closeCode, String? closeReason]) async {
+    closed = true;
+  }
+
+  @override
+  Future get done => Future.value();
 }
 
 Message _message({

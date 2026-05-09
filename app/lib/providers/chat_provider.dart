@@ -34,13 +34,19 @@ final messageSyncServiceProvider = Provider<MessageSyncService>((ref) {
 
 final chatProvider = ChangeNotifierProvider<ChatProvider>((ref) {
   final auth = ref.watch(authProvider);
+  final webSocketService = ref.watch(webSocketServiceProvider);
+  final token = auth.user?.token;
+  if (token == null || token.isEmpty) {
+    unawaited(webSocketService.disconnect());
+  } else {
+    webSocketService.connect(token: token);
+  }
   final service = ChatProvider.initializing(
     currentUserId: auth.user?.id ?? '',
     databaseFuture: ref.watch(localDatabaseServiceProvider),
     syncService: ref.watch(messageSyncServiceProvider),
-    webSocketService: ref.watch(webSocketServiceProvider),
+    webSocketService: webSocketService,
   );
-  ref.onDispose(service.dispose);
   return service;
 });
 
