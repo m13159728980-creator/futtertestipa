@@ -2,7 +2,7 @@
 
 Date: 2026-05-09
 
-## Installed
+## Tool Check Results
 
 - Git:
 
@@ -74,7 +74,7 @@ At line:2 char:1
 
 ## Build Implications
 
-- Backend development: blocked by node
+- Backend development: blocked by missing Node.js/npm
 - Flutter development: blocked by flutter
 - APK build: blocked by Flutter
-- Demo video: blocked by missing device, emulator, or recorder
+- Demo video: not verified; device/emulator/recorder checks still needed
