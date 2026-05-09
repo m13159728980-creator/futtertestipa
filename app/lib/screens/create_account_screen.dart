@@ -35,6 +35,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     final auth = ref.watch(authProvider);
     final nameError = _nameError;
     final accountError = _accountError;
+    final canSubmit = _canSubmit;
 
     return Scaffold(
       body: SafeArea(
@@ -81,7 +82,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
               ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _registering ? null : _submit,
+              onPressed: canSubmit ? _submit : null,
               child: _registering
                   ? const SizedBox.square(
                       dimension: 20,
@@ -112,6 +113,14 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     return null;
   }
 
+  bool get _isFormValid {
+    return _nameError == null &&
+        AccountValidator.validateAccount(_accountController.text) == null &&
+        _accountAvailable != false;
+  }
+
+  bool get _canSubmit => _isFormValid && !_registering;
+
   Future<void> _onAccountChanged(String value) async {
     setState(() {
       _accountAvailable = null;
@@ -138,12 +147,16 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   }
 
   Future<void> _submit() async {
+    if (_registering) {
+      return;
+    }
+
     setState(() {
       _submitted = true;
       _remoteError = null;
     });
 
-    if (_nameError != null || _accountError != null) {
+    if (!_isFormValid) {
       return;
     }
 

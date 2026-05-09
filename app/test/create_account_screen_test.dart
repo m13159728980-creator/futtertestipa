@@ -7,13 +7,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('blank name shows exactly 请输入名字', (tester) async {
+  testWidgets('blank name disables submit button', (tester) async {
     await tester.pumpWidget(_testApp());
 
-    await tester.tap(find.text('开始聊天'));
+    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
     await tester.pump();
 
-    expect(find.text('请输入名字'), findsOneWidget);
+    expect(_submitButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('invalid account disables submit button', (tester) async {
+    await tester.pumpWidget(_testApp());
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Xiao Ming');
+    await tester.enterText(find.byType(TextFormField).at(1), 'xiaoming');
+    await tester.pump();
+
+    expect(_submitButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('occupied account disables submit button', (tester) async {
+    await tester.pumpWidget(_testApp(accountAvailable: false));
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Xiao Ming');
+    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
+    await tester.pumpAndSettle();
+
+    expect(_submitButton(tester).onPressed, isNull);
   });
 
   testWidgets('invalid account shows exactly 账号必须是英文，且以@开头', (tester) async {
@@ -46,8 +66,12 @@ void main() {
   });
 }
 
-Widget _testApp() {
-  final api = _FakeApiService();
+ElevatedButton _submitButton(WidgetTester tester) {
+  return tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+}
+
+Widget _testApp({bool accountAvailable = true}) {
+  final api = _FakeApiService(accountAvailable: accountAvailable);
   final storage = InMemorySecureStorage();
 
   return ProviderScope(
@@ -60,6 +84,10 @@ Widget _testApp() {
 }
 
 class _FakeApiService implements ApiService {
+  _FakeApiService({required this.accountAvailable});
+
+  final bool accountAvailable;
+
   @override
   Future<User> register({
     required String displayName,
@@ -84,7 +112,7 @@ class _FakeApiService implements ApiService {
   }
 
   @override
-  Future<bool> checkAccount(String account) async => true;
+  Future<bool> checkAccount(String account) async => accountAvailable;
 
   @override
   Future<void> deleteAccount({
