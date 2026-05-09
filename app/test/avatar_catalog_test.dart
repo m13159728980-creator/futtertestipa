@@ -32,10 +32,12 @@ void main() {
   });
 
   test('invalid avatar index falls back to the first avatar', () {
-    final fallback = avatarByIndex(-1);
+    for (final invalidIndex in [-1, avatarCatalog.length]) {
+      final fallback = avatarByIndex(invalidIndex);
 
-    expect(fallback.index, 0);
-    expect(fallback.icon, Icons.person);
-    expect(fallback.color, Colors.blue);
+      expect(fallback.index, 0);
+      expect(fallback.icon, Icons.person);
+      expect(fallback.color, Colors.blue);
+    }
   });
 }

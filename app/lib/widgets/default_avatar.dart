@@ -10,16 +10,13 @@ class DefaultAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avatar = avatarByIndex(index);
-    final foregroundColor = avatar.color == Colors.yellow
-        ? Colors.black87
-        : Colors.white;
 
     return CircleAvatar(
       radius: radius,
       backgroundColor: avatar.color,
       child: Icon(
         avatar.icon,
-        color: foregroundColor,
+        color: Colors.white,
         semanticLabel: avatar.label,
         size: radius,
       ),
