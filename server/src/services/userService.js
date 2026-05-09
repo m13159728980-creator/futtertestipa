@@ -163,7 +163,9 @@ function createUserService(options = {}) {
 
   async function isAccountAvailable(account) {
     validateAccount(account);
-    const existing = await repository.findByAccount(account);
+    const existing = repository.findActiveByAccount
+      ? await repository.findActiveByAccount(account)
+      : await repository.findByAccount(account);
     return !existing;
   }
 

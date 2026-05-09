@@ -7,11 +7,14 @@ const { createAuthRoutes } = require('./src/api/authRoutes');
 const { createContactRoutes } = require('./src/api/contactRoutes');
 const { createGroupRoutes } = require('./src/api/groupRoutes');
 const { createMessageRoutes } = require('./src/api/messageRoutes');
+const { createMediaRoutes } = require('./src/api/mediaRoutes');
+const { createStickerRoutes } = require('./src/api/stickerRoutes');
 const { createUserRoutes } = require('./src/api/userRoutes');
 const { createAuthMiddleware } = require('./src/middleware/auth');
 const { createBurnCleanupJob } = require('./src/jobs/burnCleanupJob');
 const { createGroupService } = require('./src/services/groupService');
 const { createMessageService } = require('./src/services/messageService');
+const { createMediaService } = require('./src/services/mediaService');
 const { createUserService } = require('./src/services/userService');
 const { createSocketServer } = require('./src/websocket/socketServer');
 
@@ -20,6 +23,7 @@ function createApp(options = {}) {
   const userService = options.userService || createUserService(options);
   const groupService = createGroupService(options);
   const messageService = options.messageService || createMessageService(options);
+  const mediaService = options.mediaService || createMediaService(options);
   const authMiddleware = createAuthMiddleware(userService);
 
   app.use(cors());
@@ -30,6 +34,8 @@ function createApp(options = {}) {
   app.use(createContactRoutes({ authMiddleware, groupService }));
   app.use(createGroupRoutes({ authMiddleware, groupService }));
   app.use(createMessageRoutes({ authMiddleware, messageService }));
+  app.use(createMediaRoutes({ authMiddleware, mediaService, storagePath: options.storagePath }));
+  app.use(createStickerRoutes(options));
 
   return app;
 }

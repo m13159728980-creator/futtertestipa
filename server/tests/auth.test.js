@@ -156,7 +156,7 @@ test('POST /api/auth/validate accepts a valid token', async () => {
   });
 });
 
-test('GET /api/users/check-account returns unavailable after account is soft-deleted', async () => {
+test('GET /api/users/check-account returns available after account is soft-deleted', async () => {
   const app = createTestApp();
   const registerRes = await request(app)
     .post('/api/auth/register')
@@ -170,7 +170,7 @@ test('GET /api/users/check-account returns unavailable after account is soft-del
   const res = await request(app).get('/api/users/check-account').query({ account: '@ZCMX' });
 
   expect(res.status).toBe(200);
-  expect(res.body).toEqual({ available: false });
+  expect(res.body).toEqual({ available: true });
 });
 
 test('POST /api/auth/validate rejects token after user is deleted', async () => {
