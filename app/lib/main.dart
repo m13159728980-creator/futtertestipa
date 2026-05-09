@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/chat_provider.dart';
 import 'screens/chat_list_screen.dart';
 import 'screens/create_account_screen.dart';
 
@@ -44,8 +45,18 @@ class PrivateChatShell extends ConsumerWidget {
         body: Center(child: CircularProgressIndicator()),
       ),
       AuthStatus.unauthenticated => const CreateAccountScreen(),
-      AuthStatus.authenticated => const ChatListScreen(),
+      AuthStatus.authenticated => const AuthenticatedChatShell(),
     };
+  }
+}
+
+class AuthenticatedChatShell extends ConsumerWidget {
+  const AuthenticatedChatShell({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(chatProvider);
+    return const ChatListScreen();
   }
 }
 
