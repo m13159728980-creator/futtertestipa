@@ -5,6 +5,7 @@ import 'package:app/main.dart';
 void main() {
   testWidgets('shows private chat shell', (WidgetTester tester) async {
     await tester.pumpWidget(const PrivateChatApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('Private Chat'), findsOneWidget);
   });

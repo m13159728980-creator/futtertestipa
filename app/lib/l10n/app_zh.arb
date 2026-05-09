@@ -1,0 +1,20 @@
+{
+  "@@locale": "zh",
+  "appTitle": "Private Chat",
+  "createAccount": "创建账号",
+  "username": "用户名",
+  "password": "密码",
+  "confirmPassword": "确认密码",
+  "avatar": "头像",
+  "chat": "聊天",
+  "newChat": "新聊天",
+  "messageHint": "消息",
+  "settings": "设置",
+  "connectionStatus": "连接状态",
+  "connecting": "正在连接...",
+  "connected": "已连接",
+  "disconnected": "已断开",
+  "connectionError": "连接错误",
+  "retry": "重试",
+  "unknownError": "出了点问题"
+}

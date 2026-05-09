@@ -1,0 +1,20 @@
+{
+  "@@locale": "en",
+  "appTitle": "Private Chat",
+  "createAccount": "Create account",
+  "username": "Username",
+  "password": "Password",
+  "confirmPassword": "Confirm password",
+  "avatar": "Avatar",
+  "chat": "Chat",
+  "newChat": "New chat",
+  "messageHint": "Message",
+  "settings": "Settings",
+  "connectionStatus": "Connection status",
+  "connecting": "Connecting...",
+  "connected": "Connected",
+  "disconnected": "Disconnected",
+  "connectionError": "Connection error",
+  "retry": "Retry",
+  "unknownError": "Something went wrong"
+}
