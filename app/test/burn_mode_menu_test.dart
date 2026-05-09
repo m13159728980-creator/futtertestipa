@@ -31,7 +31,13 @@ void main() {
 
     await tester.tap(find.byTooltip('Burn timer'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('5绉?'));
+    expect(find.text('5秒'), findsOneWidget);
+    expect(find.text('10秒'), findsOneWidget);
+    expect(find.text('30秒'), findsOneWidget);
+    expect(find.text('1分钟'), findsOneWidget);
+    expect(find.text('关闭'), findsOneWidget);
+
+    await tester.tap(find.text('5秒'));
     await tester.pumpAndSettle();
 
     expect(selected, const Duration(seconds: 5));
@@ -39,7 +45,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Burn timer'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('鍏抽棴'));
+    await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
 
     expect(selected, isNull);

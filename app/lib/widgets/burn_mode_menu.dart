@@ -42,12 +42,12 @@ class BurnModeMenu extends StatelessWidget {
       initialValue: BurnModeMenuValue.fromDuration(selected),
       onSelected: (value) => onSelected(value.duration),
       itemBuilder: (context) => const [
-        PopupMenuItem(value: BurnModeMenuValue.seconds5, child: Text('5绉?')),
-        PopupMenuItem(value: BurnModeMenuValue.seconds10, child: Text('10绉?')),
-        PopupMenuItem(value: BurnModeMenuValue.seconds30, child: Text('30绉?')),
-        PopupMenuItem(value: BurnModeMenuValue.seconds60, child: Text('1鍒嗛挓')),
+        PopupMenuItem(value: BurnModeMenuValue.seconds5, child: Text('5秒')),
+        PopupMenuItem(value: BurnModeMenuValue.seconds10, child: Text('10秒')),
+        PopupMenuItem(value: BurnModeMenuValue.seconds30, child: Text('30秒')),
+        PopupMenuItem(value: BurnModeMenuValue.seconds60, child: Text('1分钟')),
         PopupMenuDivider(),
-        PopupMenuItem(value: BurnModeMenuValue.off, child: Text('鍏抽棴')),
+        PopupMenuItem(value: BurnModeMenuValue.off, child: Text('关闭')),
       ],
     );
   }
