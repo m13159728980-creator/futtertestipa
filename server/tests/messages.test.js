@@ -115,6 +115,24 @@ test('group message fan-out target list includes active members', async () => {
   expect(result.targets).toEqual([1, 2, 3]);
 });
 
+test('group send requires sender to be an active group member', async () => {
+  const { repository, service } = createService();
+  repository.setGroupMembers(10, [
+    { userId: 2 },
+    { userId: 3 }
+  ]);
+
+  await expect(service.createMessage(1, {
+    toId: 10,
+    toType: 'group',
+    type: 'text',
+    content: 'outsider'
+  })).rejects.toMatchObject({
+    name: 'MessageServiceError',
+    statusCode: 403
+  });
+});
+
 test('read receipt creates message_reads', async () => {
   const { repository, service } = createService();
   const { message } = await service.createMessage(1, {
@@ -130,6 +148,35 @@ test('read receipt creates message_reads', async () => {
   await expect(repository.listReads(message.id)).resolves.toEqual([
     { messageId: message.id, userId: 2, readAt: '2026-05-10T00:00:00.000Z' }
   ]);
+});
+
+test('unrelated users cannot mark private messages delivered or read', async () => {
+  const { service } = createService();
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'private'
+  });
+
+  await expect(service.markDelivered(message.id, 3)).rejects.toMatchObject({ statusCode: 403 });
+  await expect(service.markRead(message.id, 3)).rejects.toMatchObject({ statusCode: 403 });
+});
+
+test('unrelated users cannot read group messages', async () => {
+  const { repository, service } = createService();
+  repository.setGroupMembers(10, [
+    { userId: 1 },
+    { userId: 2 }
+  ]);
+  const { message } = await service.createMessage(1, {
+    toId: 10,
+    toType: 'group',
+    type: 'text',
+    content: 'group'
+  });
+
+  await expect(service.markRead(message.id, 3)).rejects.toMatchObject({ statusCode: 403 });
 });
 
 test('revoke succeeds within 5 minutes and fails after 5 minutes', async () => {
@@ -161,6 +208,23 @@ test('revoke succeeds within 5 minutes and fails after 5 minutes', async () => {
   });
 });
 
+test('revoke rejects terminal messages', async () => {
+  const { service } = createService();
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'terminal'
+  });
+
+  await service.revokeMessage(message.id, 1);
+
+  await expect(service.revokeMessage(message.id, 1)).rejects.toMatchObject({
+    name: 'MessageServiceError',
+    statusCode: 409
+  });
+});
+
 test('burn start records burn_started_at once', async () => {
   let current = new Date('2026-05-10T00:00:00.000Z');
   const { service } = createService(() => current);
@@ -178,6 +242,23 @@ test('burn start records burn_started_at once', async () => {
 
   expect(first.message.burnStartedAt).toBe('2026-05-10T00:00:00.000Z');
   expect(second.message.burnStartedAt).toBe('2026-05-10T00:00:00.000Z');
+});
+
+test('burn start requires an authorized reader and rejects terminal messages', async () => {
+  const { service } = createService();
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'burn',
+    burnAfter: 10
+  });
+
+  await expect(service.startBurn(message.id, 1)).rejects.toMatchObject({ statusCode: 403 });
+  await expect(service.startBurn(message.id, 3)).rejects.toMatchObject({ statusCode: 403 });
+
+  await service.revokeMessage(message.id, 1);
+  await expect(service.startBurn(message.id, 2)).rejects.toMatchObject({ statusCode: 409 });
 });
 
 test('sync returns messages from the last 7 days only', async () => {
@@ -257,6 +338,23 @@ test('burn expire marks expired burn messages', async () => {
     status: 'burned',
     deletedAt: '2026-05-10T00:00:06.000Z'
   });
+});
+
+test('burn expire ignores revoked messages', async () => {
+  let current = new Date('2026-05-10T00:00:00.000Z');
+  const { service } = createService(() => current);
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'revoked burn',
+    burnAfter: 5
+  });
+  await service.startBurn(message.id, 2);
+  await service.revokeMessage(message.id, 1);
+
+  current = new Date('2026-05-10T00:00:06.000Z');
+  await expect(service.expireBurnedMessages()).resolves.toEqual([]);
 });
 
 test('startBurn rejects messages without burnAfter', async () => {

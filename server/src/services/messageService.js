@@ -47,6 +47,7 @@ function createMemoryMessageRepository() {
   const messages = [];
   const reads = [];
   const groupMembers = new Map();
+  const users = new Set();
 
   function activeGroupMemberIds(groupId) {
     return (groupMembers.get(Number(groupId)) || [])
@@ -55,6 +56,11 @@ function createMemoryMessageRepository() {
   }
 
   return {
+    setActiveUsers(userIds) {
+      users.clear();
+      userIds.forEach((userId) => users.add(Number(userId)));
+    },
+
     setGroupMembers(groupId, members) {
       groupMembers.set(Number(groupId), members.map((member) => ({
         userId: Number(member.userId),
@@ -82,6 +88,14 @@ function createMemoryMessageRepository() {
 
     async findMessageById(id) {
       return mapMessage(messages.find((message) => message.id === id));
+    },
+
+    async userExists(userId) {
+      return users.size === 0 || users.has(Number(userId));
+    },
+
+    async isActiveGroupMember(groupId, userId) {
+      return activeGroupMemberIds(groupId).includes(Number(userId));
     },
 
     async groupTargetIds(groupId) {
@@ -146,7 +160,7 @@ function createMemoryMessageRepository() {
           message.burnAfter > 0 &&
           message.burnStartedAt &&
           !message.deletedAt &&
-          message.status !== 'burned' &&
+          !['revoked', 'burned'].includes(message.status) &&
           new Date(message.burnStartedAt).getTime() + message.burnAfter * 1000 <= now.getTime()
         )
         .map(mapMessage);
@@ -206,6 +220,35 @@ function createPostgresMessageRepository(query = db.query) {
         [id]
       );
       return mapMessage(rows[0]);
+    },
+
+    async userExists(userId) {
+      const { rows } = await query(
+        `
+          SELECT 1
+          FROM users
+          WHERE id = $1
+            AND deleted_at IS NULL
+          LIMIT 1
+        `,
+        [userId]
+      );
+      return rows.length > 0;
+    },
+
+    async isActiveGroupMember(groupId, userId) {
+      const { rows } = await query(
+        `
+          SELECT 1
+          FROM group_members
+          WHERE group_id = $1
+            AND user_id = $2
+            AND removed_at IS NULL
+          LIMIT 1
+        `,
+        [groupId, userId]
+      );
+      return rows.length > 0;
     },
 
     async groupTargetIds(groupId) {
@@ -291,7 +334,7 @@ function createPostgresMessageRepository(query = db.query) {
           WHERE burn_after > 0
             AND burn_started_at IS NOT NULL
             AND deleted_at IS NULL
-            AND status <> 'burned'
+            AND status NOT IN ('revoked', 'burned')
             AND burn_started_at + (burn_after * INTERVAL '1 second') <= $1
         `,
         [now]
@@ -384,12 +427,48 @@ function createMessageService(options = {}) {
     return uniqueNumbers([message.fromId, message.toId]);
   }
 
+  async function requireActiveMessage(messageId) {
+    const message = await repository.findMessageById(messageId);
+    if (!message) {
+      throw new MessageServiceError('Message not found', 404);
+    }
+    if (message.deletedAt || ['revoked', 'burned'].includes(message.status)) {
+      throw new MessageServiceError('Message is no longer active', 409);
+    }
+    return message;
+  }
+
+  async function isParticipant(message, userId) {
+    const actorId = Number(userId);
+    if (message.toType === 'user') {
+      return message.fromId === actorId || message.toId === actorId;
+    }
+    return repository.isActiveGroupMember(message.toId, actorId);
+  }
+
+  async function requireParticipant(message, userId) {
+    if (!(await isParticipant(message, userId))) {
+      throw new MessageServiceError('Message access denied', 403);
+    }
+  }
+
   async function createMessage(fromId, input) {
-    const message = await repository.createMessage(normalizeMessageInput(fromId, input, now));
+    const data = normalizeMessageInput(fromId, input, now);
+    if (data.toType === 'group') {
+      if (!(await repository.isActiveGroupMember(data.toId, data.fromId))) {
+        throw new MessageServiceError('Only active group members can send messages', 403);
+      }
+    } else if (repository.userExists && !(await repository.userExists(data.toId))) {
+      throw new MessageServiceError('Message target not found', 404);
+    }
+
+    const message = await repository.createMessage(data);
     return { message, targets: await targetsFor(message) };
   }
 
-  async function markDelivered(messageId) {
+  async function markDelivered(messageId, userId) {
+    const existing = await requireActiveMessage(messageId);
+    await requireParticipant(existing, userId);
     const message = await repository.markDelivered(messageId);
     if (!message) {
       throw new MessageServiceError('Message not found', 404);
@@ -398,6 +477,8 @@ function createMessageService(options = {}) {
   }
 
   async function markRead(messageId, userId) {
+    const existing = await requireActiveMessage(messageId);
+    await requireParticipant(existing, userId);
     const message = await repository.markRead(messageId, Number(userId), now());
     if (!message) {
       throw new MessageServiceError('Message not found', 404);
@@ -406,10 +487,7 @@ function createMessageService(options = {}) {
   }
 
   async function revokeMessage(messageId, userId) {
-    const existing = await repository.findMessageById(messageId);
-    if (!existing) {
-      throw new MessageServiceError('Message not found', 404);
-    }
+    const existing = await requireActiveMessage(messageId);
     if (existing.fromId !== Number(userId)) {
       throw new MessageServiceError('Only sender can revoke message', 403);
     }
@@ -422,13 +500,14 @@ function createMessageService(options = {}) {
   }
 
   async function startBurn(messageId, userId) {
-    const existing = await repository.findMessageById(messageId);
-    if (!existing) {
-      throw new MessageServiceError('Message not found', 404);
-    }
+    const existing = await requireActiveMessage(messageId);
     if (existing.burnAfter <= 0) {
       throw new MessageServiceError('Message does not burn', 400);
     }
+    if (existing.toType === 'user' && existing.fromId === Number(userId)) {
+      throw new MessageServiceError('Sender cannot start private message burn', 403);
+    }
+    await requireParticipant(existing, userId);
 
     await repository.markRead(messageId, Number(userId), now());
     const message = await repository.startBurn(messageId, now());

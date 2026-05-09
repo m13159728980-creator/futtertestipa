@@ -15,6 +15,10 @@ function send(socket, type, payload) {
   }
 }
 
+function clientPayload(result) {
+  return { message: result.message };
+}
+
 function createSocketServer({ server, messageService, userService, authenticateToken } = {}) {
   const socketsByUserId = new Map();
   const authenticate = authenticateToken || (async (token) => {
@@ -46,29 +50,29 @@ function createSocketServer({ server, messageService, userService, authenticateT
   }
 
   async function handleAuthedEvent(socket, userId, event) {
-    if (event.type === 'message:create') {
+    if (event.type === 'message.send') {
       const result = await messageService.createMessage(userId, event.payload || {});
-      broadcast(result.targets, 'message:created', result);
+      broadcast(result.targets, 'message.send', clientPayload(result));
       return;
     }
-    if (event.type === 'message:delivered') {
-      const result = await messageService.markDelivered(event.messageId || event.payload?.messageId);
-      broadcast(result.targets, 'message:delivered', result);
+    if (event.type === 'message.delivered') {
+      const result = await messageService.markDelivered(event.messageId || event.payload?.messageId, userId);
+      broadcast(result.targets, 'message.delivered', clientPayload(result));
       return;
     }
-    if (event.type === 'message:read') {
+    if (event.type === 'message.read') {
       const result = await messageService.markRead(event.messageId || event.payload?.messageId, userId);
-      broadcast(result.targets, 'message:read', result);
+      broadcast(result.targets, 'message.read', clientPayload(result));
       return;
     }
-    if (event.type === 'message:revoke') {
+    if (event.type === 'message.revoke') {
       const result = await messageService.revokeMessage(event.messageId || event.payload?.messageId, userId);
-      broadcast(result.targets, 'message:revoked', result);
+      broadcast(result.targets, 'message.revoke', clientPayload(result));
       return;
     }
-    if (event.type === 'message:burn') {
+    if (event.type === 'message.burn.start') {
       const result = await messageService.startBurn(event.messageId || event.payload?.messageId, userId);
-      broadcast(result.targets, 'message:burn_started', result);
+      broadcast(result.targets, 'message.burn.start', clientPayload(result));
     }
   }
 
@@ -113,6 +117,7 @@ function createSocketServer({ server, messageService, userService, authenticateT
 
   return {
     broadcast,
+    clientPayload,
     handleConnection,
     socketsByUserId,
     webSocketServer

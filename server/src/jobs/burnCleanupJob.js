@@ -5,7 +5,7 @@ function createBurnCleanupJob({ messageService, notifier, intervalMs = 1000 } = 
     const expired = await messageService.expireBurnedMessages();
     for (const result of expired) {
       if (notifier) {
-        notifier(result.targets, 'message:burned', result);
+        notifier(result.targets, 'message.burn.expire', { message: result.message });
       }
     }
     return expired;
