@@ -58,22 +58,43 @@ function createStickerRoutes(options = {}) {
     }
   });
 
-  router.get('/stickers/:pack.zip', (req, res) => {
-    const slug = String(req.params.pack || '');
-    const pack = DEFAULT_PACKS.find((candidate) => candidate.slug === slug);
-    if (!pack) {
-      return res.status(404).json({ message: 'Sticker pack not found' });
+  async function findPackBySlug(slug) {
+    if (repository && repository.findActivePackBySlug) {
+      return repository.findActivePackBySlug(slug);
     }
+    return DEFAULT_PACKS.find((candidate) => candidate.slug === slug) || null;
+  }
 
-    const filePath = path.resolve(stickerRoot, pack.zipPath);
-    if (!filePath.startsWith(stickerRoot + path.sep)) {
-      return res.status(403).json({ message: 'Unsafe sticker path' });
+  function safeStickerPath(pack) {
+    const zipPath = pack.zipPath ?? pack.zip_path;
+    const filePath = path.resolve(stickerRoot, zipPath || '');
+    if (filePath !== stickerRoot && !filePath.startsWith(stickerRoot + path.sep)) {
+      return null;
     }
-    return res.download(filePath, `${slug}.zip`, (error) => {
-      if (error && !res.headersSent) {
-        res.status(404).json({ message: 'Sticker pack not found' });
+    return filePath;
+  }
+
+  router.get('/stickers/:pack.zip', async (req, res, next) => {
+    const slug = String(req.params.pack || '');
+    try {
+      const pack = await findPackBySlug(slug);
+      if (!pack) {
+        return res.status(404).json({ message: 'Sticker pack not found' });
       }
-    });
+
+      const filePath = safeStickerPath(pack);
+      if (!filePath) {
+        return res.status(403).json({ message: 'Unsafe sticker path' });
+      }
+
+      return res.download(filePath, `${slug}.zip`, (error) => {
+        if (error && !res.headersSent) {
+          res.status(404).json({ message: 'Sticker pack not found' });
+        }
+      });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   return router;

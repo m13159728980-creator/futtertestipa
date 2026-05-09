@@ -46,11 +46,8 @@ function createAccountPurgeJob(options = {}) {
     let completed = 0;
 
     for (const deletion of due) {
-      try {
-        if (await repository.purgeUser(deletion.userId)) {
-          purged += 1;
-        }
-      } finally {
+      if (await repository.purgeUser(deletion.userId)) {
+        purged += 1;
         await repository.markCompleted(deletion.userId, completedAt);
         completed += 1;
       }

@@ -23,8 +23,35 @@ test('deploy.sh is an idempotent Ubuntu/Debian deployment script for the chat se
   expect(script).toContain('ufw allow 3001/tcp');
   expect(script).toContain('ufw allow 5000:6000/udp');
   expect(script).toContain('curl');
+  expect(script).toContain('http://127.0.0.1:${API_PORT:-3000}/api/health');
   expect(script).not.toMatch(/rm\s+-rf\s+\$?APP_DIR/);
   expect(script).not.toContain('git reset --hard');
+});
+
+test('deploy.sh provisions PostgreSQL database and user before migrations', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+  const databaseSetupIndex = script.indexOf('CREATE DATABASE');
+  const migrationIndex = script.indexOf('npm run migrate');
+
+  expect(script).toContain('DB_NAME="${DB_NAME:-private_chat}"');
+  expect(script).toContain('DB_USER="${DB_USER:-chat_user}"');
+  expect(script).toContain('DB_PASSWORD="${CHAT_DB_PASSWORD:-chat_password_change_me}"');
+  expect(script).toContain('sudo -u postgres psql');
+  expect(script).toContain('CREATE ROLE');
+  expect(script).toContain('CREATE DATABASE');
+  expect(script).toContain('ALTER DATABASE');
+  expect(databaseSetupIndex).toBeGreaterThan(-1);
+  expect(migrationIndex).toBeGreaterThan(databaseSetupIndex);
+});
+
+test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+
+  expect(script).toContain('--exclude .env');
+  expect(script).toContain('--exclude storage');
+  expect(script).toContain('if [ ! -f "$APP_DIR/.env" ]; then');
+  expect(script).toContain('cp "$APP_DIR/.env.example" "$APP_DIR/.env"');
+  expect(script).toContain('DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}');
 });
 
 test('.env.example documents required deployment defaults', () => {

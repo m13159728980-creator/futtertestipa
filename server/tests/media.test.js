@@ -165,7 +165,7 @@ test('account deletion marks deletion, increments token version, records purge, 
   expect(checkRes.body).toEqual({ available: true });
 });
 
-test('account purge job marks due account deletions complete after conservative purge attempt', async () => {
+test('account purge job marks due account deletions complete after successful purge', async () => {
   const completed = [];
   const job = createAccountPurgeJob({
     repository: {
@@ -175,6 +175,27 @@ test('account purge job marks due account deletions complete after conservative 
       },
       async purgeUser(userId) {
         expect(userId).toBe(7);
+        return true;
+      },
+      async markCompleted(userId, completedAt) {
+        completed.push({ userId, completedAt });
+      }
+    },
+    now: () => new Date('2026-05-10T00:00:00.000Z')
+  });
+
+  await expect(job.runOnce()).resolves.toEqual({ processed: 1, purged: 1, completed: 1 });
+  expect(completed).toEqual([{ userId: 7, completedAt: new Date('2026-05-10T00:00:00.000Z') }]);
+});
+
+test('account purge job leaves deletion pending when purge fails', async () => {
+  const completed = [];
+  const job = createAccountPurgeJob({
+    repository: {
+      async listDueDeletions() {
+        return [{ userId: 9, purgeAfter: new Date('2026-05-09T00:00:00.000Z') }];
+      },
+      async purgeUser() {
         return false;
       },
       async markCompleted(userId, completedAt) {
@@ -184,6 +205,78 @@ test('account purge job marks due account deletions complete after conservative 
     now: () => new Date('2026-05-10T00:00:00.000Z')
   });
 
-  await expect(job.runOnce()).resolves.toEqual({ processed: 1, purged: 0, completed: 1 });
-  expect(completed).toEqual([{ userId: 7, completedAt: new Date('2026-05-10T00:00:00.000Z') }]);
+  await expect(job.runOnce()).resolves.toEqual({ processed: 1, purged: 0, completed: 0 });
+  expect(completed).toEqual([]);
+});
+
+test('GET /api/stickers/packs returns repository-backed sticker pack metadata', async () => {
+  const app = createApp({
+    userRepository: createMemoryUserRepository(),
+    stickerRepository: {
+      async listActivePacks() {
+        return [{
+          id: 'pack-1',
+          slug: 'custom',
+          name: 'Custom Pack',
+          version: 3,
+          zipPath: 'custom/custom.zip',
+          manifest: { stickers: ['wave'] },
+          official: false
+        }];
+      }
+    }
+  });
+
+  const res = await request(app).get('/api/stickers/packs');
+
+  expect(res.status).toBe(200);
+  expect(res.body.packs).toEqual([{
+    id: 'pack-1',
+    slug: 'custom',
+    name: 'Custom Pack',
+    version: 3,
+    manifest: { stickers: ['wave'] },
+    downloadUrl: '/stickers/custom.zip',
+    official: false
+  }]);
+});
+
+test('GET /stickers/:pack.zip downloads repository-backed sticker pack relative to sticker storage', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stickers-'));
+  const zipPath = path.join(tempDir, 'stickers', 'custom', 'custom.zip');
+  fs.mkdirSync(path.dirname(zipPath), { recursive: true });
+  fs.writeFileSync(zipPath, 'zip bytes');
+  const app = createApp({
+    userRepository: createMemoryUserRepository(),
+    storagePath: tempDir,
+    stickerRepository: {
+      async findActivePackBySlug(slug) {
+        expect(slug).toBe('custom');
+        return { slug: 'custom', name: 'Custom Pack', zipPath: 'custom/custom.zip' };
+      }
+    }
+  });
+
+  const res = await request(app).get('/stickers/custom.zip');
+
+  expect(res.status).toBe(200);
+  expect(res.text).toBe('zip bytes');
+});
+
+test('GET /stickers/:pack.zip rejects repository zip paths outside sticker storage', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stickers-unsafe-'));
+  const app = createApp({
+    userRepository: createMemoryUserRepository(),
+    storagePath: tempDir,
+    stickerRepository: {
+      async findActivePackBySlug() {
+        return { slug: 'unsafe', name: 'Unsafe Pack', zipPath: '../unsafe.zip' };
+      }
+    }
+  });
+
+  const res = await request(app).get('/stickers/unsafe.zip');
+
+  expect(res.status).toBe(403);
+  expect(res.body).toEqual({ message: 'Unsafe sticker path' });
 });
