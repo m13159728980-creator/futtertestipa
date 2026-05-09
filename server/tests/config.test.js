@@ -77,6 +77,18 @@ test('accepts valid WS_PORT override', () => {
   expect(config.wsPort).toBe(4000);
 });
 
+test('falls back when WS_PORT is below valid port range', () => {
+  const config = loadConfig({ WS_PORT: '0' });
+
+  expect(config.wsPort).toBe(3001);
+});
+
+test('falls back when WS_PORT is above valid port range', () => {
+  const config = loadConfig({ WS_PORT: '70000' });
+
+  expect(config.wsPort).toBe(3001);
+});
+
 test('falls back when OFFLINE_RETENTION_DAYS is not positive', () => {
   const config = loadConfig({ OFFLINE_RETENTION_DAYS: '0' });
 
