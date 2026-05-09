@@ -31,6 +31,8 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+const _fallbackErrorMessage = '璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯';
+
 class HttpApiService implements ApiService {
   HttpApiService({http.Client? client, String baseUrl = AppConfig.apiBaseUrl})
     : _client = client ?? http.Client(),
@@ -115,10 +117,19 @@ class HttpApiService implements ApiService {
     if (response.body.isEmpty) {
       return {};
     }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } on FormatException {
+      throw const ApiException(_fallbackErrorMessage);
+    }
+    throw const ApiException(_fallbackErrorMessage);
   }
 
   String _message(Map<String, dynamic> body) {
-    return body['message'] as String? ?? '请求失败，请稍后重试';
+    final message = body['message'];
+    return message is String ? message : _fallbackErrorMessage;
   }
 }

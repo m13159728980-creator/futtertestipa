@@ -30,11 +30,22 @@ void main() {
       expect(await service.readMasterKey(), key);
     });
 
-    test('clear deletes the master key', () async {
+    test('ensureMasterKey keeps an existing valid key', () async {
+      final validKey = base64Encode(List<int>.filled(32, 7));
+      FlutterSecureStorage.setMockInitialValues({'master_key': validKey});
+      final service = FlutterSecureStorageService();
+
+      final key = await service.ensureMasterKey();
+
+      expect(key, validKey);
+      expect(await service.readMasterKey(), validKey);
+    });
+
+    test('clearAllLocalSecrets deletes the master key', () async {
       final service = FlutterSecureStorageService();
       await service.ensureMasterKey();
 
-      await service.clear();
+      await service.clearAllLocalSecrets();
 
       expect(await service.readMasterKey(), isNull);
     });
@@ -51,7 +62,9 @@ void main() {
     });
 
     test('ensureMasterKey replaces an existing invalid key', () async {
-      final storage = InMemorySecureStorage(initialValues: {'master_key': 'invalid'});
+      final storage = InMemorySecureStorage(
+        initialValues: {'master_key': 'invalid'},
+      );
 
       final key = await storage.ensureMasterKey();
 
@@ -60,11 +73,23 @@ void main() {
       expect(await storage.readMasterKey(), key);
     });
 
-    test('clear deletes the master key', () async {
+    test('ensureMasterKey keeps an existing valid key', () async {
+      final validKey = base64Encode(List<int>.filled(32, 7));
+      final storage = InMemorySecureStorage(
+        initialValues: {'master_key': validKey},
+      );
+
+      final key = await storage.ensureMasterKey();
+
+      expect(key, validKey);
+      expect(await storage.readMasterKey(), validKey);
+    });
+
+    test('clearAllLocalSecrets deletes the master key', () async {
       final storage = InMemorySecureStorage();
       await storage.ensureMasterKey();
 
-      await storage.clear();
+      await storage.clearAllLocalSecrets();
 
       expect(await storage.readMasterKey(), isNull);
     });

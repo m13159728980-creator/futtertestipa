@@ -47,7 +47,7 @@ class AuthProvider extends ChangeNotifier {
       await _storageService.saveSession(validatedUser);
       notifyListeners();
     } catch (_) {
-      await _storageService.clear();
+      await _storageService.clearAllLocalSecrets();
       _setUnauthenticated();
     }
   }
@@ -81,7 +81,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logoutLocal() async {
-    await _storageService.clear();
+    await _storageService.clearAllLocalSecrets();
     _setUnauthenticated();
   }
 

@@ -20,7 +20,7 @@ abstract interface class SecureStorageService {
 
   Future<String> ensureMasterKey();
 
-  Future<void> clear();
+  Future<void> clearAllLocalSecrets();
 }
 
 class FlutterSecureStorageService implements SecureStorageService {
@@ -71,7 +71,7 @@ class FlutterSecureStorageService implements SecureStorageService {
   }
 
   @override
-  Future<void> clear() async {
+  Future<void> clearAllLocalSecrets() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
     await _storage.delete(key: _masterKeyKey);
@@ -114,7 +114,7 @@ class InMemorySecureStorage implements SecureStorageService {
   }
 
   @override
-  Future<void> clear() async {
+  Future<void> clearAllLocalSecrets() async {
     _values.remove('auth_token');
     _values.remove('auth_user');
     _values.remove('master_key');
