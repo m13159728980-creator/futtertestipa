@@ -101,7 +101,10 @@ class MediaService {
 
   Future<String> upload(File file, {String? token}) async {
     await validateFile(file);
-    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/media'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/media/upload'),
+    );
     if (token != null) {
       request.headers['Authorization'] = 'Bearer $token';
     }
@@ -114,8 +117,27 @@ class MediaService {
       throw MediaValidationException('Upload failed: ${response.statusCode}');
     }
     final decoded = jsonDecode(response.body);
-    if (decoded is Map<String, dynamic> && decoded['path'] is String) {
-      return decoded['path'] as String;
+    if (decoded is Map<String, dynamic>) {
+      final file = decoded['file'];
+      if (file is Map<String, dynamic>) {
+        final directPath = file['path'] ?? file['url'] ?? file['downloadUrl'];
+        if (directPath is String && directPath.isNotEmpty) {
+          return directPath;
+        }
+        final id = file['id'];
+        if (id is String && id.isNotEmpty) {
+          return '/media/$id';
+        }
+        final storagePath = file['storagePath'];
+        if (storagePath is String && storagePath.isNotEmpty) {
+          return storagePath;
+        }
+      }
+      final directPath =
+          decoded['path'] ?? decoded['url'] ?? decoded['downloadUrl'];
+      if (directPath is String && directPath.isNotEmpty) {
+        return directPath;
+      }
     }
     throw const MediaValidationException('Upload response missing media path');
   }

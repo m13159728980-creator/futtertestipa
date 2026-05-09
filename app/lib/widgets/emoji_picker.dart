@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 abstract interface class RecentEmojiStore {
   Future<List<String>> loadRecent();
@@ -21,6 +26,48 @@ class InMemoryRecentEmojiStore implements RecentEmojiStore {
   }
 }
 
+class FileRecentEmojiStore implements RecentEmojiStore {
+  FileRecentEmojiStore({
+    Directory? directory,
+    this.filename = 'recent_emoji.json',
+  }) : _directory = directory;
+
+  final Directory? _directory;
+  final String filename;
+
+  @override
+  Future<List<String>> loadRecent() async {
+    final file = await _file();
+    if (!file.existsSync()) {
+      return const [];
+    }
+
+    try {
+      final decoded = jsonDecode(file.readAsStringSync());
+      if (decoded is List) {
+        return decoded.whereType<String>().take(24).toList(growable: false);
+      }
+    } on FormatException {
+      return const [];
+    } on FileSystemException {
+      return const [];
+    }
+    return const [];
+  }
+
+  @override
+  Future<void> saveRecent(List<String> emoji) async {
+    final file = await _file();
+    file.parent.createSync(recursive: true);
+    file.writeAsStringSync(jsonEncode(emoji.take(24).toList()));
+  }
+
+  Future<File> _file() async {
+    final directory = _directory ?? await getApplicationDocumentsDirectory();
+    return File(p.join(directory.path, filename));
+  }
+}
+
 class EmojiPicker extends StatefulWidget {
   const EmojiPicker({
     required this.onEmojiSelected,
@@ -30,38 +77,38 @@ class EmojiPicker extends StatefulWidget {
   });
 
   static const defaultEmoji = <String>[
-    '😀',
-    '😄',
+    '🙂',
     '😂',
-    '😊',
     '😍',
-    '😘',
-    '😎',
-    '🥳',
-    '😢',
-    '😡',
     '👍',
-    '👎',
-    '👏',
-    '🙏',
-    '💪',
-    '👀',
     '❤️',
     '🔥',
-    '✨',
-    '🎉',
     '✅',
-    '❌',
+    '🎉',
+    '😀',
+    '😄',
+    '😉',
+    '😎',
+    '🤔',
+    '😢',
+    '😮',
+    '🙏',
+    '💪',
+    '👏',
     '⭐',
-    '🔒',
-    '☕',
-    '🍰',
+    '✨',
+    '☀️',
+    '🌙',
     '🚀',
-    '📎',
+    '📌',
     '📷',
-    '🎤',
-    '📁',
     '💬',
+    '🔒',
+    '🔑',
+    '☕',
+    '🎂',
+    '🎁',
+    '💡',
   ];
 
   final ValueChanged<String> onEmojiSelected;
@@ -73,8 +120,7 @@ class EmojiPicker extends StatefulWidget {
 }
 
 class _EmojiPickerState extends State<EmojiPicker> {
-  late final RecentEmojiStore _store =
-      widget.store ?? InMemoryRecentEmojiStore();
+  late final RecentEmojiStore _store = widget.store ?? FileRecentEmojiStore();
   var _recent = <String>[];
 
   @override

@@ -90,30 +90,41 @@ void main() {
     },
   );
 
-  test('upload and download use the injectable http client', () async {
-    final requests = <http.Request>[];
-    final service = MediaService(
-      rootDirectory: tempDir,
-      baseUrl: 'https://example.test',
-      client: MockClient((request) async {
-        requests.add(request);
-        if (request.method == 'GET') {
-          return http.Response.bytes([1, 2, 3], 200);
-        }
-        return http.Response('{"path":"/media/photo.jpg"}', 201);
-      }),
-    );
-    final file = File(p.join(tempDir.path, 'photo.jpg'))..writeAsBytesSync([9]);
+  test(
+    'upload posts to media upload endpoint and reads backend file path',
+    () async {
+      final requests = <http.Request>[];
+      final service = MediaService(
+        rootDirectory: tempDir,
+        baseUrl: 'https://example.test',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.method == 'GET') {
+            return http.Response.bytes([1, 2, 3], 200);
+          }
+          return http.Response(
+            '{"file":{"id":"m1","ownerId":1,"originalName":"photo.jpg","mimeType":"image/jpeg","sizeBytes":1,"storagePath":"/server/storage/media/m1.jpg","sha256":"hash"}}',
+            201,
+          );
+        }),
+      );
+      final file = File(p.join(tempDir.path, 'photo.jpg'))
+        ..writeAsBytesSync([9]);
 
-    final uploadPath = await service.upload(file, token: 'token');
-    final downloaded = await service.download(
-      '/media/photo.jpg',
-      token: 'token',
-    );
+      final uploadPath = await service.upload(file, token: 'token');
+      final downloaded = await service.download(
+        '/media/photo.jpg',
+        token: 'token',
+      );
 
-    expect(uploadPath, '/media/photo.jpg');
-    expect(downloaded, [1, 2, 3]);
-    expect(requests.map((request) => request.method), ['POST', 'GET']);
-    expect(requests.first.headers['Authorization'], 'Bearer token');
-  });
+      expect(uploadPath, '/media/m1');
+      expect(downloaded, [1, 2, 3]);
+      expect(requests.map((request) => request.method), ['POST', 'GET']);
+      expect(
+        requests.first.url,
+        Uri.parse('https://example.test/media/upload'),
+      );
+      expect(requests.first.headers['Authorization'], 'Bearer token');
+    },
+  );
 }

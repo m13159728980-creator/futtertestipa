@@ -130,9 +130,9 @@ test('GET /api/stickers/packs returns default official sticker pack metadata', a
   expect(res.status).toBe(200);
   expect(res.body.packs).toHaveLength(3);
   expect(res.body.packs).toEqual([
-    expect.objectContaining({ slug: 'official-basic', name: expect.any(String), version: 1 }),
-    expect.objectContaining({ slug: 'official-reactions', name: expect.any(String), version: 1 }),
-    expect.objectContaining({ slug: 'official-fun', name: expect.any(String), version: 1 })
+    expect.objectContaining({ slug: 'pack1', downloadUrl: '/stickers/pack1.zip', name: expect.any(String), version: 1 }),
+    expect.objectContaining({ slug: 'pack2', downloadUrl: '/stickers/pack2.zip', name: expect.any(String), version: 1 }),
+    expect.objectContaining({ slug: 'pack3', downloadUrl: '/stickers/pack3.zip', name: expect.any(String), version: 1 })
   ]);
 });
 

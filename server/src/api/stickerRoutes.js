@@ -4,26 +4,26 @@ const config = require('../config');
 
 const DEFAULT_PACKS = [
   {
-    slug: 'official-basic',
-    name: 'Official Basic',
+    slug: 'pack1',
+    name: 'Gram Basics',
     version: 1,
-    zipPath: 'official-basic.zip',
+    zipPath: 'pack1.zip',
     manifest: { stickers: [] },
     official: true
   },
   {
-    slug: 'official-reactions',
-    name: 'Official Reactions',
+    slug: 'pack2',
+    name: 'Secure Mood',
     version: 1,
-    zipPath: 'official-reactions.zip',
+    zipPath: 'pack2.zip',
     manifest: { stickers: [] },
     official: true
   },
   {
-    slug: 'official-fun',
-    name: 'Official Fun',
+    slug: 'pack3',
+    name: 'Daily Signals',
     version: 1,
-    zipPath: 'official-fun.zip',
+    zipPath: 'pack3.zip',
     manifest: { stickers: [] },
     official: true
   }
