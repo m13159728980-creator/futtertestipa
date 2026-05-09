@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
-import 'widgets/default_avatar.dart';
+import 'providers/auth_provider.dart';
+import 'screens/chat_list_screen.dart';
+import 'screens/create_account_screen.dart';
 
 void main() {
-  runApp(const PrivateChatApp());
+  runApp(const ProviderScope(child: PrivateChatApp()));
 }
 
 class PrivateChatApp extends StatelessWidget {
@@ -29,40 +32,20 @@ class PrivateChatApp extends StatelessWidget {
   }
 }
 
-class PrivateChatShell extends StatelessWidget {
+class PrivateChatShell extends ConsumerWidget {
   const PrivateChatShell({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.chat),
-        actions: [
-          IconButton(
-            tooltip: localizations.settings,
-            onPressed: () {},
-            icon: const Icon(Icons.settings),
-          ),
-        ],
+    return switch (auth.status) {
+      AuthStatus.loading => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const DefaultAvatar(index: 0, radius: 32),
-            const SizedBox(height: 16),
-            Text(
-              localizations.appTitle,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(localizations.connectionStatus),
-          ],
-        ),
-      ),
-    );
+      AuthStatus.unauthenticated => const CreateAccountScreen(),
+      AuthStatus.authenticated => const ChatListScreen(),
+    };
   }
 }
 
