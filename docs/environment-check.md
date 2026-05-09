@@ -13,18 +13,15 @@ git version 2.54.0.windows.1
 - Node.js:
 
 ```text
-node : The term 'node' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the
- spelling of the name, or if a path was included, verify that the path is correct and try again.
-At line:2 char:1
-+ node --version
-+ ~~~~
-    + CategoryInfo          : ObjectNotFound: (node:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
+Initial check: node was not found.
+After installing OpenJS.NodeJS.LTS with winget and refreshing PATH:
+v24.15.0
 ```
 
 - npm:
 
 ```text
+Initial PowerShell check before Node installation:
 npm : The term 'npm' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the s
 pelling of the name, or if a path was included, verify that the path is correct and try again.
 At line:2 char:1
@@ -32,6 +29,13 @@ At line:2 char:1
 + ~~~
     + CategoryInfo          : ObjectNotFound: (npm:String) [], CommandNotFoundException
     + FullyQualifiedErrorId : CommandNotFoundException
+
+After installing OpenJS.NodeJS.LTS, `npm --version` is blocked by PowerShell execution policy:
+npm : File C:\Program Files\nodejs\npm.ps1 cannot be loaded because running scripts is disabled on this system.
+
+Using the command shim works:
+npm.cmd --version
+11.12.1
 ```
 
 - Flutter:
@@ -74,7 +78,7 @@ At line:2 char:1
 
 ## Build Implications
 
-- Backend development: blocked by missing Node.js/npm
+- Backend development: ready with `node` and `npm.cmd`; use `npm.cmd` in PowerShell unless execution policy is changed.
 - Flutter development: blocked by flutter
 - APK build: blocked by Flutter
 - Demo video: not verified; device/emulator/recorder checks still needed
