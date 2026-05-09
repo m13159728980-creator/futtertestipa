@@ -158,6 +158,38 @@ void main() {
     await database.close();
   });
 
+  test('sends burn text messages with burn duration', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+    );
+
+    await provider.sendText(
+      'alice',
+      'secret',
+      burnAfter: const Duration(seconds: 30),
+    );
+
+    final message = provider.messagesFor('alice').single;
+    expect(message.type, MessageType.burn);
+    expect(message.burnAfter, const Duration(seconds: 30));
+    expect(socket.sentJson.last['payload'], containsPair('type', 'burn'));
+    expect(socket.sentJson.last['payload'], containsPair('burnAfter', 30));
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
   test(
     'backend message.send with payload.message upserts and increments unread',
     () async {

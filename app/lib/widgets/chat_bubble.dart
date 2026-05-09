@@ -1,4 +1,5 @@
 import 'package:app/models/message.dart';
+import 'package:app/widgets/burn_timer.dart';
 import 'package:flutter/material.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -6,6 +7,7 @@ class ChatBubble extends StatelessWidget {
     required this.message,
     required this.currentUserId,
     this.senderName,
+    this.onBurnExpired,
     super.key,
   });
 
@@ -15,13 +17,15 @@ class ChatBubble extends StatelessWidget {
   final Message message;
   final String currentUserId;
   final String? senderName;
+  final ValueChanged<String>? onBurnExpired;
 
   @override
   Widget build(BuildContext context) {
     final isMine = message.fromId == currentUserId;
+    final isBurned = message.status == MessageStatus.burned;
     final content = message.status == MessageStatus.revoked
         ? 'Message revoked'
-        : message.status == MessageStatus.burned
+        : isBurned
         ? 'Message burned'
         : message.content ?? '';
 
@@ -54,13 +58,27 @@ class ChatBubble extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                 ],
-                Text(content, style: Theme.of(context).textTheme.bodyMedium),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  child: Text(
+                    content,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (message.type == MessageType.burn)
-                      _BurnTimerArea(duration: message.burnAfter),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: message.type == MessageType.burn && !isBurned
+                          ? _BurnTimerArea(
+                              key: ValueKey('burn-timer-${message.id}'),
+                              message: message,
+                              onExpired: onBurnExpired,
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                     Text(
                       _statusText(message.status),
                       style: Theme.of(
@@ -89,13 +107,17 @@ class ChatBubble extends StatelessWidget {
 }
 
 class _BurnTimerArea extends StatelessWidget {
-  const _BurnTimerArea({required this.duration});
+  const _BurnTimerArea({
+    required this.message,
+    required this.onExpired,
+    super.key,
+  });
 
-  final Duration? duration;
+  final Message message;
+  final ValueChanged<String>? onExpired;
 
   @override
   Widget build(BuildContext context) {
-    final seconds = duration?.inSeconds;
     return Padding(
       key: const Key('burn-timer-area'),
       padding: const EdgeInsets.only(right: 8),
@@ -104,10 +126,13 @@ class _BurnTimerArea extends StatelessWidget {
         children: [
           const Icon(Icons.local_fire_department, size: 14),
           const SizedBox(width: 2),
-          Text(
-            seconds == null ? '--' : '${seconds}s',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          if (message.burnAfter == null)
+            Text('--', style: Theme.of(context).textTheme.labelSmall)
+          else
+            BurnTimer(
+              duration: message.burnAfter!,
+              onExpired: () => onExpired?.call(message.id),
+            ),
         ],
       ),
     );

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app/core/services/secure_window_service.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/group_provider.dart';
 import 'package:app/widgets/chat_bubble.dart';
@@ -16,12 +19,29 @@ class GroupScreen extends ConsumerStatefulWidget {
 }
 
 class _GroupScreenState extends ConsumerState<GroupScreen> {
+  static const _secureWindowService = SecureWindowService();
+
+  Duration? _burnAfter;
+
   @override
   void initState() {
     super.initState();
     Future.microtask(
       () => ref.read(groupProvider).loadMessages(widget.groupId),
     );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_secureWindowService.disable());
+    super.dispose();
+  }
+
+  Future<void> _setBurnAfter(Duration? duration) async {
+    setState(() {
+      _burnAfter = duration;
+    });
+    await _secureWindowService.setEnabled(duration != null);
   }
 
   @override
@@ -41,6 +61,9 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             Expanded(child: Text(widget.title ?? group.name)),
           ],
         ),
+        actions: [
+          _BurnModeMenu(selected: _burnAfter, onSelected: _setBurnAfter),
+        ],
       ),
       body: Column(
         children: [
@@ -61,6 +84,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
                       currentUserId: currentUserId,
                       senderName:
                           group.memberNames[message.fromId] ?? message.fromId,
+                      onBurnExpired: (messageId) =>
+                          ref.read(groupProvider).markBurned(messageId),
                     ),
                   ),
                 );
@@ -68,11 +93,40 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             ),
           ),
           MessageComposer(
-            onSend: (text) =>
-                ref.read(groupProvider).sendText(widget.groupId, text),
+            onSend: (text) => ref
+                .read(groupProvider)
+                .sendText(widget.groupId, text, burnAfter: _burnAfter),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BurnModeMenu extends StatelessWidget {
+  const _BurnModeMenu({required this.selected, required this.onSelected});
+
+  final Duration? selected;
+  final ValueChanged<Duration?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<Duration?>(
+      tooltip: 'Burn timer',
+      icon: Icon(
+        Icons.local_fire_department,
+        color: selected == null ? null : Theme.of(context).colorScheme.error,
+      ),
+      initialValue: selected,
+      onSelected: onSelected,
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: Duration(seconds: 5), child: Text('5秒')),
+        PopupMenuItem(value: Duration(seconds: 10), child: Text('10秒')),
+        PopupMenuItem(value: Duration(seconds: 30), child: Text('30秒')),
+        PopupMenuItem(value: Duration(seconds: 60), child: Text('1分钟')),
+        PopupMenuDivider(),
+        PopupMenuItem(value: null, child: Text('关闭')),
+      ],
     );
   }
 }

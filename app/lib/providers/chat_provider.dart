@@ -186,11 +186,16 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendText(String peerId, String text) async {
+  Future<void> sendText(
+    String peerId,
+    String text, {
+    Duration? burnAfter,
+  }) async {
     await sendConversationText(
       toType: ConversationType.user,
       peerId: peerId,
       text: text,
+      burnAfter: burnAfter,
     );
   }
 
@@ -198,6 +203,7 @@ class ChatProvider extends ChangeNotifier {
     required ConversationType toType,
     required String peerId,
     required String text,
+    Duration? burnAfter,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
@@ -208,9 +214,10 @@ class ChatProvider extends ChangeNotifier {
       fromId: _currentUserId,
       toId: peerId,
       toType: toType,
-      type: MessageType.text,
+      type: burnAfter == null ? MessageType.text : MessageType.burn,
       content: trimmed,
       timestamp: DateTime.now().toUtc(),
+      burnAfter: burnAfter,
       status: MessageStatus.sent,
     );
     await _upsertLocal(message);
@@ -314,6 +321,10 @@ class ChatProvider extends ChangeNotifier {
         return;
       }
     }
+  }
+
+  Future<void> markBurned(String messageId) {
+    return _updateStatus(messageId, MessageStatus.burned);
   }
 
   String _conversationPeer(Message message) {

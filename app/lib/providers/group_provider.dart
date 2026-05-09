@@ -54,12 +54,17 @@ class GroupProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> sendText(String groupId, String text) {
+  Future<void> sendText(String groupId, String text, {Duration? burnAfter}) {
     return _chat.sendConversationText(
       toType: ConversationType.group,
       peerId: groupId,
       text: text,
+      burnAfter: burnAfter,
     );
+  }
+
+  Future<void> markBurned(String messageId) {
+    return _chat.markBurned(messageId);
   }
 
   @override
