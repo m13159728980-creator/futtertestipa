@@ -1,14 +1,16 @@
 require('dotenv').config();
 
-function parseInteger(value, fallback) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+function parseInteger(value, fallback, isValid = () => true) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && isValid(parsed) ? parsed : fallback;
 }
 
 const lanHost = process.env.LAN_HOST || '192.168.1.103';
 const publicDomain = process.env.PUBLIC_DOMAIN || 'wdsj.fun';
-const apiPort = parseInteger(process.env.API_PORT, 3000);
-const wsPort = parseInteger(process.env.WS_PORT, 3001);
+const isValidPort = (value) => value >= 1 && value <= 65535;
+const isPositive = (value) => value > 0;
+const apiPort = parseInteger(process.env.API_PORT, 3000, isValidPort);
+const wsPort = parseInteger(process.env.WS_PORT, 3001, isValidPort);
 
 module.exports = {
   apiPort,
@@ -18,5 +20,5 @@ module.exports = {
   storagePath: process.env.STORAGE_PATH || './storage',
   lanUrl: process.env.LAN_URL || `http://${lanHost}:${apiPort}`,
   publicUrl: process.env.PUBLIC_URL || `http://${publicDomain}:${apiPort}`,
-  offlineRetentionDays: parseInteger(process.env.OFFLINE_RETENTION_DAYS, 7)
+  offlineRetentionDays: parseInteger(process.env.OFFLINE_RETENTION_DAYS, 7, isPositive)
 };
