@@ -122,6 +122,11 @@ class CallProvider extends ChangeNotifier {
         },
       ),
     );
+    for (final peerId in peerIds) {
+      final offer = await _webRtcService.createOffer(peerId);
+      await _webRtcService.setLocalDescription(peerId, offer);
+      _sendSdp(peerId, offer);
+    }
     notifyListeners();
   }
 
@@ -161,7 +166,9 @@ class CallProvider extends ChangeNotifier {
     if (current == null) {
       return;
     }
-    _signalingService.send(WebSocketEvent(type: type, payload: {'callId': current.id}));
+    _signalingService.send(
+      WebSocketEvent(type: type, payload: {'callId': current.id}),
+    );
     _session = current.copyWith(state: state);
     await _webRtcService.cleanup();
     notifyListeners();
@@ -208,7 +215,9 @@ class CallProvider extends ChangeNotifier {
       return;
     }
     final ids = _stringList(payload['participantIds']);
-    final participantIds = ids.contains(_currentUserId) ? ids : [...ids, _currentUserId];
+    final participantIds = ids.contains(_currentUserId)
+        ? ids
+        : [...ids, _currentUserId];
     _session = CallSession(
       id: callId,
       state: CallState.incoming,
@@ -229,10 +238,15 @@ class CallProvider extends ChangeNotifier {
     if (current == null || payload['callId']?.toString() != current.id) {
       return;
     }
-    final participants = _participantsFromPayload(payload, current.participantIds);
+    final participants = _participantsFromPayload(
+      payload,
+      current.participantIds,
+    );
     _session = current.copyWith(
       state: state ?? current.state,
-      startedAt: state == CallState.active && current.startedAt == null ? _now() : current.startedAt,
+      startedAt: state == CallState.active && current.startedAt == null
+          ? _now()
+          : current.startedAt,
       participants: participants,
     );
     notifyListeners();
@@ -248,7 +262,13 @@ class CallProvider extends ChangeNotifier {
       fromId,
       onIceCandidate: (candidate) => _sendIce(fromId, candidate),
     );
-    await _webRtcService.setRemoteDescription(fromId, description);
+    final rtcDescription = RtcSessionDescription.fromMap(description);
+    await _webRtcService.setRemoteDescription(fromId, rtcDescription);
+    if (rtcDescription.type == 'offer') {
+      final answer = await _webRtcService.createAnswer(fromId);
+      await _webRtcService.setLocalDescription(fromId, answer);
+      _sendSdp(fromId, answer);
+    }
   }
 
   Future<void> _handleIce(Map<String, dynamic> payload) async {
@@ -286,6 +306,23 @@ class CallProvider extends ChangeNotifier {
     );
   }
 
+  void _sendSdp(String peerId, RtcSessionDescription description) {
+    final current = _session;
+    if (current == null) {
+      return;
+    }
+    _signalingService.send(
+      WebSocketEvent(
+        type: 'call.sdp',
+        payload: {
+          'callId': current.id,
+          'targetId': peerId,
+          'description': description.toMap(),
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();
@@ -312,9 +349,7 @@ Map<String, CallParticipantState> _participantsFromPayload(
         entry.key.toString(): callParticipantStateFromJson(entry.value),
     };
   }
-  return {
-    for (final id in participantIds) id: CallParticipantState.invited,
-  };
+  return {for (final id in participantIds) id: CallParticipantState.invited};
 }
 
 Map<String, dynamic>? _map(Object? value) {

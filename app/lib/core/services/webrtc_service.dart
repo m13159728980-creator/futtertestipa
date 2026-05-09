@@ -1,14 +1,56 @@
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+class RtcSessionDescription {
+  const RtcSessionDescription({required this.type, required this.sdp});
+
+  final String type;
+  final String sdp;
+
+  factory RtcSessionDescription.fromMap(Map<String, dynamic> map) {
+    return RtcSessionDescription(
+      type: map['type']?.toString() ?? '',
+      sdp: map['sdp']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() => {'type': type, 'sdp': sdp};
+
+  RTCSessionDescription toWebRtc() => RTCSessionDescription(sdp, type);
+
+  static RtcSessionDescription fromWebRtc(RTCSessionDescription description) {
+    return RtcSessionDescription(
+      type: description.type ?? '',
+      sdp: description.sdp ?? '',
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is RtcSessionDescription &&
+            other.type == type &&
+            other.sdp == sdp;
+  }
+
+  @override
+  int get hashCode => Object.hash(type, sdp);
+}
+
 abstract interface class WebRtcService {
   Future<void> startLocalMedia({bool video = true});
   Future<void> ensurePeerConnection(
     String peerId, {
     required void Function(Map<String, dynamic>) onIceCandidate,
   });
+  Future<RtcSessionDescription> createOffer(String peerId);
+  Future<RtcSessionDescription> createAnswer(String peerId);
+  Future<void> setLocalDescription(
+    String peerId,
+    RtcSessionDescription description,
+  );
   Future<void> setRemoteDescription(
     String peerId,
-    Map<String, dynamic> description,
+    RtcSessionDescription description,
   );
   Future<void> addIceCandidate(String peerId, Map<String, dynamic> candidate);
   Future<void> setMicrophoneEnabled(bool enabled);
@@ -60,20 +102,31 @@ class FlutterWebRtcService implements WebRtcService {
   }
 
   @override
+  Future<RtcSessionDescription> createOffer(String peerId) async {
+    final description = await _connectionFor(peerId).createOffer();
+    return RtcSessionDescription.fromWebRtc(description);
+  }
+
+  @override
+  Future<RtcSessionDescription> createAnswer(String peerId) async {
+    final description = await _connectionFor(peerId).createAnswer();
+    return RtcSessionDescription.fromWebRtc(description);
+  }
+
+  @override
+  Future<void> setLocalDescription(
+    String peerId,
+    RtcSessionDescription description,
+  ) async {
+    await _connectionFor(peerId).setLocalDescription(description.toWebRtc());
+  }
+
+  @override
   Future<void> setRemoteDescription(
     String peerId,
-    Map<String, dynamic> description,
+    RtcSessionDescription description,
   ) async {
-    final connection = _connections[peerId];
-    if (connection == null) {
-      return;
-    }
-    await connection.setRemoteDescription(
-      RTCSessionDescription(
-        description['sdp']?.toString(),
-        description['type']?.toString(),
-      ),
-    );
+    await _connectionFor(peerId).setRemoteDescription(description.toWebRtc());
   }
 
   @override
@@ -96,7 +149,8 @@ class FlutterWebRtcService implements WebRtcService {
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {
-    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = enabled;
     }
   }
@@ -108,7 +162,8 @@ class FlutterWebRtcService implements WebRtcService {
 
   @override
   Future<void> setCameraEnabled(bool enabled) async {
-    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = enabled;
     }
   }
@@ -124,5 +179,13 @@ class FlutterWebRtcService implements WebRtcService {
     }
     await _localStream?.dispose();
     _localStream = null;
+  }
+
+  RTCPeerConnection _connectionFor(String peerId) {
+    final connection = _connections[peerId];
+    if (connection == null) {
+      throw StateError('Peer connection has not been created for $peerId');
+    }
+    return connection;
   }
 }
