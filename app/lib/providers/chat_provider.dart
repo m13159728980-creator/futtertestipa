@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:app/core/services/local_database_service.dart';
+import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
@@ -9,12 +11,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-final localDatabaseServiceProvider = Provider<LocalDatabaseService>((ref) {
-  final database = LocalDatabaseService(
-    cryptoService: CryptoService(CryptoService.generateKey()),
+final localDatabaseServiceProvider = Provider<Future<LocalDatabaseService>>((
+  ref,
+) {
+  final future = _createLocalDatabaseService(
+    ref.watch(secureStorageServiceProvider),
+    ref.watch(messageStoreProvider),
   );
-  ref.onDispose(database.close);
-  return database;
+  ref.onDispose(() {
+    unawaited(future.then((database) => database.close()));
+  });
+  return future;
+});
+
+final messageStoreProvider = Provider<MessageStore>((ref) {
+  return SqfliteMessageStore();
 });
 
 final messageSyncServiceProvider = Provider<MessageSyncService>((ref) {
@@ -23,9 +34,9 @@ final messageSyncServiceProvider = Provider<MessageSyncService>((ref) {
 
 final chatProvider = ChangeNotifierProvider<ChatProvider>((ref) {
   final auth = ref.watch(authProvider);
-  final service = ChatProvider(
+  final service = ChatProvider.initializing(
     currentUserId: auth.user?.id ?? '',
-    database: ref.watch(localDatabaseServiceProvider),
+    databaseFuture: ref.watch(localDatabaseServiceProvider),
     syncService: ref.watch(messageSyncServiceProvider),
     webSocketService: ref.watch(webSocketServiceProvider),
   );
@@ -59,8 +70,39 @@ class ChatProvider extends ChangeNotifier {
     required MessageSyncService syncService,
     required WebSocketService webSocketService,
     Uuid? uuid,
+  }) : this._(
+         currentUserId: currentUserId,
+         database: database,
+         databaseFuture: Future.value(database),
+         syncService: syncService,
+         webSocketService: webSocketService,
+         uuid: uuid,
+       );
+
+  ChatProvider.initializing({
+    required String currentUserId,
+    required Future<LocalDatabaseService> databaseFuture,
+    required MessageSyncService syncService,
+    required WebSocketService webSocketService,
+    Uuid? uuid,
+  }) : this._(
+         currentUserId: currentUserId,
+         databaseFuture: databaseFuture,
+         syncService: syncService,
+         webSocketService: webSocketService,
+         uuid: uuid,
+       );
+
+  ChatProvider._({
+    required String currentUserId,
+    LocalDatabaseService? database,
+    required Future<LocalDatabaseService> databaseFuture,
+    required MessageSyncService syncService,
+    required WebSocketService webSocketService,
+    Uuid? uuid,
   }) : _currentUserId = currentUserId,
        _database = database,
+       _databaseFuture = databaseFuture,
        _syncService = syncService,
        _webSocketService = webSocketService,
        _uuid = uuid ?? const Uuid() {
@@ -68,7 +110,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   final String _currentUserId;
-  final LocalDatabaseService _database;
+  LocalDatabaseService? _database;
+  final Future<LocalDatabaseService> _databaseFuture;
   final MessageSyncService _syncService;
   final WebSocketService _webSocketService;
   final Uuid _uuid;
@@ -113,7 +156,8 @@ class ChatProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     await _ensureDatabaseOpen();
-    final local = await _database.listMessages(
+    final database = await _databaseService();
+    final local = await database.listMessages(
       toType: toType,
       peerId: peerId,
       currentUserId: _currentUserId,
@@ -128,7 +172,7 @@ class ChatProvider extends ChangeNotifier {
     };
     for (final message in remote) {
       merged[message.id] = message;
-      await _database.upsertMessage(message);
+      await database.upsertMessage(message);
     }
     _messagesByConversation[_key(toType, peerId)] = _sorted(merged.values);
     _unreadCounts[_key(toType, peerId)] = 0;
@@ -171,9 +215,13 @@ class ChatProvider extends ChangeNotifier {
 
   Future<void> handleEvent(WebSocketEvent event) async {
     switch (event.type) {
+      case 'message.send':
       case 'message.created':
       case 'message.received':
-        final message = Message.fromJson(event.payload);
+        final message = _messageFromPayload(event.payload);
+        if (message == null) {
+          return;
+        }
         await _upsertLocal(message);
         if (message.fromId != _currentUserId) {
           final key = _key(message.toType, _conversationPeer(message));
@@ -181,24 +229,26 @@ class ChatProvider extends ChangeNotifier {
           notifyListeners();
         }
       case 'message.delivered':
-        await _updateStatus(
-          event.payload['messageId'],
-          MessageStatus.delivered,
-        );
+        await _updateFromStatusEvent(event.payload, MessageStatus.delivered);
       case 'message.read':
-        await _updateStatus(event.payload['messageId'], MessageStatus.read);
+        await _updateFromStatusEvent(event.payload, MessageStatus.read);
+      case 'message.revoke':
       case 'message.revoked':
-        await _updateStatus(event.payload['messageId'], MessageStatus.revoked);
+        await _updateFromStatusEvent(event.payload, MessageStatus.revoked);
       case 'message.burned':
-        await _updateStatus(event.payload['messageId'], MessageStatus.burned);
+        await _updateFromStatusEvent(event.payload, MessageStatus.burned);
       case 'message.burn.start':
-        await _markBurnStarted(event.payload['messageId']);
+        final message = _messageFromPayload(event.payload);
+        await _markBurnStarted(
+          message?.id ?? _messageIdFromPayload(event.payload),
+        );
     }
   }
 
   Future<void> _upsertLocal(Message message) async {
     await _ensureDatabaseOpen();
-    await _database.upsertMessage(message);
+    final database = await _databaseService();
+    await database.upsertMessage(message);
     final key = _key(message.toType, _conversationPeer(message));
     final current = _messagesByConversation[key] ?? const [];
     _messagesByConversation[key] = _sorted([
@@ -223,14 +273,28 @@ class ChatProvider extends ChangeNotifier {
       _messagesByConversation[entry.key] = copy;
       if (status == MessageStatus.burned) {
         await _ensureDatabaseOpen();
-        await _database.markBurned(id);
+        final database = await _databaseService();
+        await database.markBurned(id);
       } else {
         await _ensureDatabaseOpen();
-        await _database.upsertMessage(updated);
+        final database = await _databaseService();
+        await database.upsertMessage(updated);
       }
       notifyListeners();
       return;
     }
+  }
+
+  Future<void> _updateFromStatusEvent(
+    Map<String, dynamic> payload,
+    MessageStatus status,
+  ) async {
+    final message = _messageFromPayload(payload);
+    if (message != null) {
+      await _upsertLocal(message.copyWith(status: status));
+      return;
+    }
+    await _updateStatus(_messageIdFromPayload(payload), status);
   }
 
   Future<void> _markBurnStarted(Object? messageId) async {
@@ -260,8 +324,13 @@ class ChatProvider extends ChangeNotifier {
 
   String _key(ConversationType type, String peerId) => '${type.name}:$peerId';
 
-  Future<void> _ensureDatabaseOpen() {
-    return _openDatabaseFuture ??= _database.open();
+  Future<LocalDatabaseService> _databaseService() async {
+    return _database ??= await _databaseFuture;
+  }
+
+  Future<void> _ensureDatabaseOpen() async {
+    final database = await _databaseService();
+    return _openDatabaseFuture ??= database.open();
   }
 
   @override
@@ -269,4 +338,33 @@ class ChatProvider extends ChangeNotifier {
     _socketSubscription?.cancel();
     super.dispose();
   }
+}
+
+Future<LocalDatabaseService> _createLocalDatabaseService(
+  SecureStorageService storageService,
+  MessageStore store,
+) async {
+  final masterKey = await storageService.ensureMasterKey();
+  return LocalDatabaseService(
+    cryptoService: CryptoService(base64Decode(masterKey)),
+    store: store,
+  );
+}
+
+Message? _messageFromPayload(Map<String, dynamic> payload) {
+  final nested = payload['message'];
+  if (nested is Map<String, dynamic>) {
+    return Message.fromJson(nested);
+  }
+  if (nested is Map) {
+    return Message.fromJson(Map<String, dynamic>.from(nested));
+  }
+  if (payload.containsKey('id')) {
+    return Message.fromJson(payload);
+  }
+  return null;
+}
+
+Object? _messageIdFromPayload(Map<String, dynamic> payload) {
+  return payload['messageId'] ?? payload['message_id'] ?? payload['id'];
 }

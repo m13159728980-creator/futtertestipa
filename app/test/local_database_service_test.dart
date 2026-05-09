@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -193,6 +194,72 @@ void main() {
 
     expect(messages.single.status, MessageStatus.burned);
   });
+
+  test(
+    'decrypts existing messages with the same persisted master key',
+    () async {
+      final sharedStore = InMemoryMessageStore();
+      final masterKey = CryptoService.generateKey();
+      final firstDatabase = LocalDatabaseService(
+        cryptoService: CryptoService(masterKey),
+        store: sharedStore,
+      );
+      await firstDatabase.open();
+      await firstDatabase.upsertMessage(
+        _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'persisted'),
+      );
+      await firstDatabase.close();
+
+      final secondDatabase = LocalDatabaseService(
+        cryptoService: CryptoService(masterKey),
+        store: sharedStore,
+      );
+      await secondDatabase.open();
+
+      final messages = await secondDatabase.listMessages(
+        toType: ConversationType.user,
+        peerId: 'bob',
+        currentUserId: 'alice',
+      );
+
+      expect(messages.single.content, 'persisted');
+
+      await secondDatabase.close();
+    },
+  );
+
+  test(
+    'does not decrypt existing messages with a different master key',
+    () async {
+      final sharedStore = InMemoryMessageStore();
+      final firstDatabase = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: sharedStore,
+      );
+      await firstDatabase.open();
+      await firstDatabase.upsertMessage(
+        _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'persisted'),
+      );
+      await firstDatabase.close();
+
+      final secondDatabase = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: sharedStore,
+      );
+      await secondDatabase.open();
+
+      expect(
+        () => secondDatabase.listMessages(
+          toType: ConversationType.user,
+          peerId: 'bob',
+          currentUserId: 'alice',
+        ),
+        throwsA(isA<SecretBoxAuthenticationError>()),
+      );
+
+      await secondDatabase.close();
+    },
+  );
 }
 
 Message _message({
