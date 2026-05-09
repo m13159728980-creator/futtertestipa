@@ -41,13 +41,19 @@ npm.cmd --version
 - Flutter:
 
 ```text
-flutter : The term 'flutter' is not recognized as the name of a cmdlet, function, script file, or operable program. Che
-ck the spelling of the name, or if a path was included, verify that the path is correct and try again.
-At line:2 char:1
-+ flutter --version
-+ ~~~~~~~
-    + CategoryInfo          : ObjectNotFound: (flutter:String) [], CommandNotFoundException
-    + FullyQualifiedErrorId : CommandNotFoundException
+Initial check: flutter was not found on PATH.
+Flutter SDK exists at C:\Users\Administrator\flutter and works when C:\Users\Administrator\flutter\bin is prepended to PATH.
+
+Flutter 3.41.9 • channel stable • https://github.com/flutter/flutter.git
+Framework • revision 00b0c91f06 (10 days ago) • 2026-04-29 10:03:19 -0700
+Engine • hash 9161402dc0e134b3fb5adee5046b6e84b1a5e1c1 (revision 42d3d75a56) (10 days ago) • 2026-04-28 17:31:55.000Z
+Tools • Dart 3.11.5 • DevTools 2.54.2
+
+flutter doctor -v summary:
+- Flutter: OK
+- Android toolchain: Android SDK at C:\tmp\android-sdk, but some Android licenses not accepted.
+- Connected devices: Windows desktop and Edge web. No Android device recorded yet.
+- Network resources: checks for https://maven.google.com/ and https://github.com/ timed out.
 ```
 
 - Java/JDK:
@@ -79,6 +85,6 @@ At line:2 char:1
 ## Build Implications
 
 - Backend development: ready with `node` and `npm.cmd`; use `npm.cmd` in PowerShell unless execution policy is changed.
-- Flutter development: blocked by flutter
-- APK build: blocked by Flutter
+- Flutter development: ready when `C:\Users\Administrator\flutter\bin` is prepended to PATH for the shell.
+- APK build: blocked by unaccepted Android licenses until `flutter doctor --android-licenses` succeeds.
 - Demo video: not verified; device/emulator/recorder checks still needed
