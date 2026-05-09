@@ -10,14 +10,27 @@ function calculateChecksum(sql) {
   return crypto.createHash('sha256').update(sql).digest('hex');
 }
 
+function assertAppliedMigrationChecksum(filename, storedChecksum, currentChecksum) {
+  if (storedChecksum === null || storedChecksum === undefined) {
+    throw new Error(
+      `Migration ${filename} was applied before checksums were recorded; pre-checksum migration table must be reconciled/reset before continuing.`
+    );
+  }
+
+  if (storedChecksum !== currentChecksum) {
+    throw new Error(`Migration checksum mismatch for ${filename}`);
+  }
+}
+
 async function ensureMigrationsTable(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename TEXT PRIMARY KEY,
-      checksum TEXT NOT NULL,
+      checksum TEXT,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await client.query('ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT');
 }
 
 async function getAppliedMigrations(client) {
@@ -51,10 +64,7 @@ async function runMigrations(options = {}) {
       const checksum = calculateChecksum(sql);
 
       if (applied.has(filename)) {
-        if (applied.get(filename) !== checksum) {
-          throw new Error(`Migration checksum mismatch for ${filename}`);
-        }
-
+        assertAppliedMigrationChecksum(filename, applied.get(filename), checksum);
         continue;
       }
 
@@ -98,6 +108,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertAppliedMigrationChecksum,
   calculateChecksum,
   runMigrations
 };
