@@ -14,8 +14,8 @@ const lanHost = process.env.LAN_HOST || '192.168.1.103';
 const publicDomain = process.env.PUBLIC_DOMAIN || 'wdsj.fun';
 const isValidPort = (value) => value >= 1 && value <= 65535;
 const isPositive = (value) => value > 0;
-const apiPort = parseInteger(process.env.API_PORT, 8080, isValidPort);
-const wsPort = parseInteger(process.env.WS_PORT, 9081, isValidPort);
+const apiPort = parseInteger(process.env.API_PORT, 10080, isValidPort);
+const wsPort = parseInteger(process.env.WS_PORT, 10081, isValidPort);
 
 module.exports = {
   apiPort,

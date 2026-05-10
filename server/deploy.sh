@@ -87,8 +87,8 @@ else
 fi
 
 validate_db_password "$DB_PASSWORD"
-upsert_env_value "$APP_DIR/.env" API_PORT "${API_PORT:-8080}"
-upsert_env_value "$APP_DIR/.env" WS_PORT "${WS_PORT:-9081}"
+upsert_env_value "$APP_DIR/.env" API_PORT "${API_PORT:-10080}"
+upsert_env_value "$APP_DIR/.env" WS_PORT "${WS_PORT:-10081}"
 chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
 
 db_user_literal="$(sql_literal "$DB_USER")"
@@ -131,13 +131,13 @@ systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 
-ufw allow 8080/tcp
-ufw allow 9081/tcp
+ufw allow 10080/tcp
+ufw allow 10081/tcp
 ufw allow 5000:6000/udp
 ufw --force enable
 
 for attempt in 1 2 3 4 5; do
-  if curl -fsS "http://127.0.0.1:${API_PORT:-8080}/api/health" >/dev/null; then
+  if curl -fsS "http://127.0.0.1:${API_PORT:-10080}/api/health" >/dev/null; then
     echo "Deployment healthy."
     exit 0
   fi

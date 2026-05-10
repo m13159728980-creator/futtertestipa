@@ -18,21 +18,21 @@ test('uses default numeric config values', () => {
     OFFLINE_RETENTION_DAYS: undefined
   });
 
-  expect(config.apiPort).toBe(8080);
-  expect(config.wsPort).toBe(9081);
+  expect(config.apiPort).toBe(10080);
+  expect(config.wsPort).toBe(10081);
   expect(config.offlineRetentionDays).toBe(7);
 });
 
 test('falls back when API_PORT is malformed', () => {
-  const config = loadConfig({ API_PORT: '8080abc' });
+  const config = loadConfig({ API_PORT: '10080abc' });
 
-  expect(config.apiPort).toBe(8080);
+  expect(config.apiPort).toBe(10080);
 });
 
 test('falls back when WS_PORT is malformed', () => {
-  const config = loadConfig({ WS_PORT: '9081abc' });
+  const config = loadConfig({ WS_PORT: '10081abc' });
 
-  expect(config.wsPort).toBe(9081);
+  expect(config.wsPort).toBe(10081);
 });
 
 test('falls back when OFFLINE_RETENTION_DAYS is malformed', () => {
@@ -44,13 +44,13 @@ test('falls back when OFFLINE_RETENTION_DAYS is malformed', () => {
 test('falls back when API_PORT uses exponential notation', () => {
   const config = loadConfig({ API_PORT: '1e3' });
 
-  expect(config.apiPort).toBe(8080);
+  expect(config.apiPort).toBe(10080);
 });
 
 test('falls back when API_PORT uses hexadecimal notation', () => {
   const config = loadConfig({ API_PORT: '0x50' });
 
-  expect(config.apiPort).toBe(8080);
+  expect(config.apiPort).toBe(10080);
 });
 
 test('accepts decimal API_PORT with surrounding whitespace', () => {
@@ -62,13 +62,13 @@ test('accepts decimal API_PORT with surrounding whitespace', () => {
 test('falls back when API_PORT is below valid port range', () => {
   const config = loadConfig({ API_PORT: '-1' });
 
-  expect(config.apiPort).toBe(8080);
+  expect(config.apiPort).toBe(10080);
 });
 
 test('falls back when API_PORT is above valid port range', () => {
   const config = loadConfig({ API_PORT: '70000' });
 
-  expect(config.apiPort).toBe(8080);
+  expect(config.apiPort).toBe(10080);
 });
 
 test('accepts valid WS_PORT override', () => {
@@ -80,13 +80,13 @@ test('accepts valid WS_PORT override', () => {
 test('falls back when WS_PORT is below valid port range', () => {
   const config = loadConfig({ WS_PORT: '0' });
 
-  expect(config.wsPort).toBe(9081);
+  expect(config.wsPort).toBe(10081);
 });
 
 test('falls back when WS_PORT is above valid port range', () => {
   const config = loadConfig({ WS_PORT: '70000' });
 
-  expect(config.wsPort).toBe(9081);
+  expect(config.wsPort).toBe(10081);
 });
 
 test('falls back when OFFLINE_RETENTION_DAYS is not positive', () => {

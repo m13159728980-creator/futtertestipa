@@ -1,4 +1,4 @@
-﻿# APK Build Manifest
+# APK Build Manifest
 
 Date: 2026-05-10
 
@@ -7,14 +7,14 @@ Date: 2026-05-10
 | File | Size | Notes |
 | --- | ---: | --- |
 | `dist/private-chat-debug.apk` | 179.54 MB | Debug APK, LAN server build |
-| `dist/private-chat-release.apk` | 79.66 MB | Release APK, public domain build |
+| `dist/private-chat-release.apk` | 79.66 MB | Release APK, public domain build with INTERNET permission |
 
 ## Current Endpoints
 
-- API: `8080`
-- WebSocket: `9081`
-- Debug build: `http://192.168.1.103:8080/api`, `ws://192.168.1.103:9081/ws`
-- Release build: `http://wdsj.fun:8080/api`, `ws://wdsj.fun:9081/ws`
+- API: `10080`
+- WebSocket: `10081`
+- Debug build: `http://192.168.1.103:10080/api`, `ws://192.168.1.103:10081/ws`
+- Release build: `http://wdsj.fun:10080/api`, `ws://wdsj.fun:10081/ws`
 
 ## Recent Changes
 
@@ -30,7 +30,7 @@ Command:
 
 ```powershell
 cd app
-flutter build apk --debug --dart-define=API_BASE_URL=http://192.168.1.103:8080/api --dart-define=WS_URL=ws://192.168.1.103:9081/ws
+flutter build apk --debug --dart-define=API_BASE_URL=http://192.168.1.103:10080/api --dart-define=WS_URL=ws://192.168.1.103:10081/ws
 ```
 
 Result:
@@ -44,7 +44,7 @@ Command:
 
 ```powershell
 cd app
-flutter build apk --release --dart-define=API_BASE_URL=http://wdsj.fun:8080/api --dart-define=WS_URL=ws://wdsj.fun:9081/ws
+flutter build apk --release --dart-define=API_BASE_URL=http://wdsj.fun:10080/api --dart-define=WS_URL=ws://wdsj.fun:10081/ws
 ```
 
 Result:
