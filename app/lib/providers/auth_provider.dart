@@ -92,6 +92,28 @@ class AuthProvider extends ChangeNotifier {
     await logoutLocal();
   }
 
+  Future<void> updateDisplayName(String displayName) async {
+    final currentUser = _user;
+    if (currentUser == null) {
+      return;
+    }
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _apiService.updateProfile(
+        token: currentUser.token,
+        displayName: displayName,
+      );
+      _user = updated.copyWith(token: currentUser.token);
+      await _storageService.saveSession(_user!);
+      notifyListeners();
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   void _setUnauthenticated() {
     _user = null;
     _status = AuthStatus.unauthenticated;

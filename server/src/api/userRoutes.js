@@ -28,6 +28,20 @@ function createUserRoutes({ authMiddleware, userService }) {
     }
   });
 
+  router.patch('/api/users/me/profile', authMiddleware, async (req, res, next) => {
+    try {
+      const user = await userService.updateProfile(req.user.id, {
+        displayName: req.body?.displayName ?? req.body?.name
+      });
+      res.json({ user: userService.serializeUser(user) });
+    } catch (error) {
+      if (error instanceof UserServiceError) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
+      return next(error);
+    }
+  });
+
   router.delete('/api/users/me', authMiddleware, async (req, res, next) => {
     try {
       await userService.softDelete(req.user.id, req.body?.account);

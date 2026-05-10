@@ -132,6 +132,20 @@ function createPostgresUserRepository(query = db.query) {
       return mapUser(rows[0]);
     },
 
+    async updateProfile(id, { displayName }) {
+      const { rows } = await query(
+        `
+          UPDATE users
+          SET display_name = $2
+          WHERE id = $1
+            AND deleted_at IS NULL
+          RETURNING id, account, display_name, avatar_index, token_version, deleted_at
+        `,
+        [id, displayName]
+      );
+      return mapUser(rows[0]);
+    },
+
     async softDelete(id) {
       const { rows } = await query(
         `
@@ -225,6 +239,15 @@ function createUserService(options = {}) {
     return user;
   }
 
+  async function updateProfile(userId, { displayName }) {
+    const normalizedDisplayName = normalizeDisplayName(displayName);
+    const user = await repository.updateProfile(userId, { displayName: normalizedDisplayName });
+    if (!user) {
+      throw new UserServiceError(USER_NOT_FOUND_MESSAGE, 404);
+    }
+    return user;
+  }
+
   async function softDelete(userId, confirmationAccount) {
     const activeUser = await repository.findActiveById(userId);
     if (!activeUser) {
@@ -248,6 +271,7 @@ function createUserService(options = {}) {
     serializeUser,
     softDelete,
     updateAvatar,
+    updateProfile,
     validateTokenPayload
   };
 }

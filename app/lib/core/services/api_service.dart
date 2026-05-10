@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:app/core/config/app_config.dart';
+import 'package:app/models/group.dart';
 import 'package:app/models/user.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +20,41 @@ abstract interface class ApiService {
   Future<void> deleteAccount({
     required String token,
     required String accountConfirmation,
+  });
+
+  Future<List<User>> listContacts({required String token});
+
+  Future<User> addContact({
+    required String token,
+    required String account,
+  });
+
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  });
+
+  Future<Group> getGroup({
+    required String token,
+    required String groupId,
+  });
+
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  });
+
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  });
+
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
   });
 }
 
@@ -101,6 +137,129 @@ class HttpApiService implements ApiService {
     if (response.statusCode != 204) {
       throw ApiException(_message(_decode(response)));
     }
+  }
+
+  @override
+  Future<List<User>> listContacts({required String token}) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/contacts'),
+      headers: _jsonHeaders(token: token),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return [
+      for (final item in (body['contacts'] as List? ?? const []))
+        if (item is Map<String, dynamic>) User.fromJson(item, token: token),
+    ];
+  }
+
+  @override
+  Future<User> addContact({
+    required String token,
+    required String account,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/contacts'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'id': account.trim()}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(_message(body));
+    }
+    return User.fromJson(body['contact'] as Map<String, dynamic>, token: token);
+  }
+
+  @override
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/groups'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({
+        'name': name.trim(),
+        'memberIds': memberIds.map(int.parse).toList(),
+      }),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 201) {
+      throw ApiException(_message(body));
+    }
+    return Group.fromJson(body['group'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Group> getGroup({
+    required String token,
+    required String groupId,
+  }) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/groups/$groupId'),
+      headers: _jsonHeaders(token: token),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return Group.fromJson(body['group'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/groups/$groupId'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'name': name.trim()}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return Group.fromJson(body['group'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/groups/$groupId/members'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'memberIds': memberIds.map(int.parse).toList()}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 201) {
+      throw ApiException(_message(body));
+    }
+    return Group.fromJson(body['group'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/users/me/profile'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'displayName': displayName.trim()}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return User.fromJson(body['user'] as Map<String, dynamic>, token: token);
   }
 
   Map<String, String> _jsonHeaders({String? token}) {

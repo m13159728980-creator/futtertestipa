@@ -43,13 +43,13 @@ class User {
     return jsonEncode(toJson());
   }
 
-  User copyWith({String? token}) {
+  User copyWith({String? displayName, String? token, int? avatarIndex}) {
     return User(
       id: id,
-      displayName: displayName,
+      displayName: displayName ?? this.displayName,
       account: account,
       token: token ?? this.token,
-      avatarIndex: avatarIndex,
+      avatarIndex: avatarIndex ?? this.avatarIndex,
     );
   }
 }

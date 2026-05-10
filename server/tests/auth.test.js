@@ -42,6 +42,14 @@ function createMemoryUserRepository() {
       user.avatarIndex = avatarIndex;
       return user;
     },
+    async updateProfile(id, { displayName }) {
+      const user = users.find((candidate) => candidate.id === Number(id) && !candidate.deletedAt);
+      if (!user) {
+        return null;
+      }
+      user.displayName = displayName;
+      return user;
+    },
     async softDelete(id) {
       const user = users.find((candidate) => candidate.id === Number(id) && !candidate.deletedAt);
       if (!user) {
@@ -213,6 +221,36 @@ test('PATCH /api/users/me/avatar rejects old token after tokenVersion changes', 
 
   expect(res.status).toBe(401);
   expect(res.body).toEqual({ message: '登录已失效' });
+});
+
+test('PATCH /api/users/me/profile updates the current user displayName', async () => {
+  const app = createTestApp();
+  const registered = await register(app, 'Old Name');
+
+  const res = await request(app)
+    .patch('/api/users/me/profile')
+    .set('Authorization', `Bearer ${registered.token}`)
+    .send({ displayName: 'New Name' });
+
+  expect(res.status).toBe(200);
+  expect(res.body.user).toEqual(expect.objectContaining({
+    id: registered.user.id,
+    account: registered.user.account,
+    displayName: 'New Name'
+  }));
+});
+
+test('PATCH /api/users/me/profile rejects blank displayName', async () => {
+  const app = createTestApp();
+  const registered = await register(app, 'Old Name');
+
+  const res = await request(app)
+    .patch('/api/users/me/profile')
+    .set('Authorization', `Bearer ${registered.token}`)
+    .send({ displayName: '   ' });
+
+  expect(res.status).toBe(400);
+  expect(res.body).toEqual({ message: '请输入名字' });
 });
 
 test('DELETE /api/users/me rejects missing confirmation', async () => {

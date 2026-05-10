@@ -7,6 +7,7 @@ import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
+import 'package:app/models/group.dart';
 import 'package:app/models/user.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/chat_provider.dart';
@@ -382,6 +383,56 @@ class _FakeApiService implements ApiService {
   Future<void> deleteAccount({
     required String token,
     required String accountConfirmation,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<User>> listContacts({required String token}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> addContact({required String token, required String account}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> getGroup({required String token, required String groupId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
   }) {
     throw UnimplementedError();
   }

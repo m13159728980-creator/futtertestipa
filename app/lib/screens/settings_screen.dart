@@ -21,6 +21,36 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         children: [
           _Section(
+            title: '账号',
+            children: [
+              ListTile(
+                title: Text(auth.user?.displayName ?? '未登录'),
+                subtitle: Text(auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}'),
+                leading: DefaultAvatar(index: auth.user?.avatarIndex ?? settings.avatarIndex),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: () => _showRenameDialog(context, ref),
+              ),
+              ListTile(
+                key: const ValueKey('settings-avatar'),
+                leading: DefaultAvatar(index: settings.avatarIndex),
+                title: const Text('更换默认头像'),
+                subtitle: Text('头像 ${settings.avatarIndex + 1}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showAvatarSheet(context, ref),
+              ),
+              ListTile(
+                title: const Text('应用锁'),
+                leading: const Icon(Icons.lock_outline),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AppLockScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          _Section(
             title: '语言',
             children: [
               Padding(
@@ -34,19 +64,6 @@ class SettingsScreen extends ConsumerWidget {
                   onSelectionChanged: (selected) =>
                       ref.read(settingsProvider).setLanguage(selected.single),
                 ),
-              ),
-            ],
-          ),
-          _Section(
-            title: '更换默认头像',
-            children: [
-              ListTile(
-                key: const ValueKey('settings-avatar'),
-                leading: DefaultAvatar(index: settings.avatarIndex),
-                title: const Text('默认头像'),
-                subtitle: Text('头像 ${settings.avatarIndex}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showAvatarSheet(context, ref),
               ),
             ],
           ),
@@ -80,12 +97,10 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: ref.read(settingsProvider).setDisableScreenshots,
               ),
               _DropdownTile<int>(
-                title: '默认 burn timer',
+                title: '默认阅后即焚',
                 value: settings.defaultBurnTimerSeconds,
                 items: const {0: '关闭', 10: '10 秒', 60: '1 分钟', 300: '5 分钟'},
-                onChanged: ref
-                    .read(settingsProvider)
-                    .setDefaultBurnTimerSeconds,
+                onChanged: ref.read(settingsProvider).setDefaultBurnTimerSeconds,
               ),
               SwitchListTile(
                 title: const Text('隐藏最后在线'),
@@ -95,7 +110,7 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           _Section(
-            title: '聊天设置',
+            title: '聊天',
             children: [
               ListTile(
                 title: const Text('字体大小'),
@@ -125,10 +140,10 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           _Section(
-            title: '数据用量',
+            title: '数据',
             children: [
               SwitchListTile(
-                title: const Text('WiFi 加载'),
+                title: const Text('仅 WiFi 加载媒体'),
                 value: settings.wifiOnlyMediaLoading,
                 onChanged: ref.read(settingsProvider).setWifiOnlyMediaLoading,
               ),
@@ -149,32 +164,17 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () async {
                   await ref.read(settingsProvider).clearCache();
                   if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('缓存已清空')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('缓存已清空')),
+                    );
                   }
                 },
               ),
             ],
           ),
           _Section(
-            title: '账号安全',
+            title: '安全',
             children: [
-              ListTile(
-                title: Text(auth.user?.displayName ?? '未登录'),
-                subtitle: Text(auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}'),
-                leading: DefaultAvatar(index: settings.avatarIndex),
-              ),
-              ListTile(
-                title: const Text('应用锁'),
-                leading: const Icon(Icons.lock_outline),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AppLockScreen(),
-                  ),
-                ),
-              ),
               ListTile(
                 key: const ValueKey('delete-account-tile'),
                 title: const Text('注销账号'),
@@ -190,7 +190,7 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               ListTile(title: Text('版本'), subtitle: Text('1.0.0')),
               ListTile(title: Text('隐私政策'), trailing: Icon(Icons.open_in_new)),
-              ListTile(title: Text('服务器状态'), subtitle: Text('待接入')),
+              ListTile(title: Text('服务器状态'), subtitle: Text('wdsj.fun:10080')),
             ],
           ),
         ],
@@ -202,38 +202,92 @@ class SettingsScreen extends ConsumerWidget {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                for (final avatar in avatarCatalog)
-                  SizedBox.square(
-                    dimension: 72,
-                    child: IconButton(
-                      key: ValueKey('avatar-choice-${avatar.index}'),
-                      tooltip: avatar.label,
-                      icon: DefaultAvatar(index: avatar.index, radius: 28),
-                      onPressed: () async {
-                        await ref
-                            .read(settingsProvider)
-                            .setAvatarIndex(avatar.index);
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+              for (final avatar in avatarCatalog)
+                SizedBox.square(
+                  dimension: 72,
+                  child: IconButton(
+                    key: ValueKey('avatar-choice-${avatar.index}'),
+                    tooltip: avatar.label,
+                    icon: DefaultAvatar(index: avatar.index, radius: 28),
+                    onPressed: () async {
+                      await ref.read(settingsProvider).setAvatarIndex(avatar.index);
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
+    final user = ref.read(authProvider).user;
+    if (user == null) {
+      return;
+    }
+    final controller = TextEditingController(text: user.displayName);
+    String? errorText;
+    var saving = false;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('修改名字'),
+          content: TextField(
+            key: const ValueKey('rename-display-name-field'),
+            controller: controller,
+            maxLength: 24,
+            decoration: InputDecoration(labelText: '名字', errorText: errorText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final name = controller.text.trim();
+                      if (name.isEmpty) {
+                        setState(() => errorText = '请输入名字');
+                        return;
+                      }
+                      setState(() {
+                        saving = true;
+                        errorText = null;
+                      });
+                      try {
+                        await ref.read(authProvider).updateDisplayName(name);
                         if (context.mounted) {
                           Navigator.of(context).pop();
                         }
-                      },
-                    ),
-                  ),
-              ],
+                      } catch (_) {
+                        setState(() {
+                          saving = false;
+                          errorText = ref.read(authProvider).errorMessage ?? '修改失败';
+                        });
+                      }
+                    },
+              child: Text(saving ? '保存中' : '保存'),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
+    controller.dispose();
   }
 
   Future<void> _startDeleteAccount(BuildContext context, WidgetRef ref) async {
@@ -241,7 +295,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('注销账号'),
-        content: const Text('注销账号会删除当前会话并清空本地密钥、本地消息和缓存。本操作不可恢复。'),
+        content: const Text('此操作不可逆！账号所有消息和群组将被清空。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -267,54 +321,50 @@ class SettingsScreen extends ConsumerWidget {
 
     return showDialog<void>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('确认注销'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('请输入ID $account 确认注销。'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    key: const ValueKey('delete-account-confirmation'),
-                    controller: controller,
-                    decoration: InputDecoration(
-                      labelText: 'ID',
-                      errorText: errorText.isEmpty ? null : errorText,
-                    ),
-                  ),
-                ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('确认注销'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('请输入 ID $account 确认注销。'),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('delete-account-confirmation'),
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: 'ID',
+                  errorText: errorText.isEmpty ? null : errorText,
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final confirmation = controller.text.trim();
-                    if (confirmation != account) {
-                      setState(() => errorText = 'ID不匹配');
-                      return;
-                    }
-                    final database = await ref.read(localDatabaseServiceProvider);
-                    await ref.read(authProvider).deleteAccount(confirmation);
-                    await database.clear();
-                    await ref.read(settingsProvider).clearCache();
-                    await ref.read(settingsProvider).reset();
-                    if (context.mounted) {
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    }
-                  },
-                  child: const Text('确认注销'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final confirmation = controller.text.trim();
+                if (confirmation != account) {
+                  setState(() => errorText = 'ID不匹配');
+                  return;
+                }
+                final database = await ref.read(localDatabaseServiceProvider);
+                await ref.read(authProvider).deleteAccount(confirmation);
+                await database.clear();
+                await ref.read(settingsProvider).clearCache();
+                await ref.read(settingsProvider).reset();
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              },
+              child: const Text('确认注销'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -337,9 +387,9 @@ class _Section extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
           ),
           ...children,

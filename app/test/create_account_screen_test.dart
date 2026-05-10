@@ -1,6 +1,7 @@
 import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/models/user.dart';
+import 'package:app/models/group.dart';
 import 'package:app/screens/create_account_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,4 +82,52 @@ class _FakeApiService implements ApiService {
     required String token,
     required String accountConfirmation,
   }) async {}
+
+  @override
+  Future<List<User>> listContacts({required String token}) async => const [];
+
+  @override
+  Future<User> addContact({required String token, required String account}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> getGroup({required String token, required String groupId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
+  }) {
+    throw UnimplementedError();
+  }
 }

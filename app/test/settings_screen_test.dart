@@ -4,6 +4,7 @@ import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
+import 'package:app/models/group.dart';
 import 'package:app/models/user.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/chat_provider.dart';
@@ -230,6 +231,7 @@ class _FakeCacheService implements CacheService {
 
 class _FakeApiService implements ApiService {
   final List<String> deleteAccountCalls = [];
+  final List<String> profileNames = [];
 
   @override
   Future<bool> checkAccount(String account) async => true;
@@ -247,4 +249,53 @@ class _FakeApiService implements ApiService {
 
   @override
   Future<User> validate(String token) async => _testUser;
+
+  @override
+  Future<List<User>> listContacts({required String token}) async => const [];
+
+  @override
+  Future<User> addContact({required String token, required String account}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> getGroup({required String token, required String groupId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
+  }) async {
+    profileNames.add(displayName);
+    return _testUser.copyWith(displayName: displayName, token: token);
+  }
 }

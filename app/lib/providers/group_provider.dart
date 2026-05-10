@@ -1,10 +1,14 @@
 import 'package:app/models/message.dart';
 import 'package:app/providers/chat_provider.dart';
+import 'package:app/providers/social_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final groupProvider = ChangeNotifierProvider<GroupProvider>((ref) {
-  return GroupProvider(chat: ref.watch(chatProvider));
+  return GroupProvider(
+    chat: ref.watch(chatProvider),
+    social: ref.watch(socialProvider),
+  );
 });
 
 class GroupConversation {
@@ -20,11 +24,15 @@ class GroupConversation {
 }
 
 class GroupProvider extends ChangeNotifier {
-  GroupProvider({required ChatProvider chat}) : _chat = chat {
+  GroupProvider({required ChatProvider chat, SocialProvider? social})
+    : _chat = chat,
+      _social = social {
     _chat.addListener(notifyListeners);
+    _social?.addListener(notifyListeners);
   }
 
   final ChatProvider _chat;
+  final SocialProvider? _social;
   final Map<String, GroupConversation> _groups = {};
 
   List<Message> messagesFor(String groupId) {
@@ -38,6 +46,19 @@ class GroupProvider extends ChangeNotifier {
   }
 
   GroupConversation groupFor(String groupId) {
+    final socialGroups = _social?.groups ?? const [];
+    for (final socialGroup in socialGroups) {
+      if (socialGroup.id != groupId) {
+        continue;
+      }
+      return GroupConversation(
+        id: socialGroup.id,
+        name: socialGroup.name,
+        memberNames: {
+          for (final member in socialGroup.members) member.userId: member.displayName,
+        },
+      );
+    }
     return _groups[groupId] ??
         GroupConversation(id: groupId, name: 'Group $groupId');
   }
@@ -70,6 +91,7 @@ class GroupProvider extends ChangeNotifier {
   @override
   void dispose() {
     _chat.removeListener(notifyListeners);
+    _social?.removeListener(notifyListeners);
     super.dispose();
   }
 }

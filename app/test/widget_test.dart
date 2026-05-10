@@ -7,9 +7,10 @@ import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/main.dart';
 import 'package:app/models/user.dart';
+import 'package:app/models/group.dart';
 import 'package:app/providers/chat_provider.dart';
 import 'package:app/screens/create_account_screen.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -55,6 +56,40 @@ void main() {
         'payload': {'token': 'token-1'},
       },
     ]);
+    expect(find.text('聊天'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+  });
+
+  testWidgets('authenticated chat list shows contacts and new chat actions', (
+    WidgetTester tester,
+  ) async {
+    final user = _user(token: 'token-1');
+    final storage = InMemorySecureStorage();
+    await storage.saveSession(user);
+
+    await tester.pumpWidget(
+      _testApp(
+        apiService: _OfflineApiService(user, [
+          const User(
+            id: '2',
+            displayName: 'Bob',
+            account: '2222222222',
+            token: 'token-1',
+            avatarIndex: 1,
+          ),
+        ]),
+        secureStorageService: storage,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob'), findsOneWidget);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加好友'), findsOneWidget);
+    expect(find.text('创建群聊'), findsOneWidget);
   });
 
   testWidgets('unauthenticated shell does not start the chat websocket', (
@@ -92,9 +127,10 @@ Widget _testApp({
 }
 
 class _OfflineApiService implements ApiService {
-  const _OfflineApiService([this.user]);
+  const _OfflineApiService([this.user, this.contacts = const []]);
 
   final User? user;
+  final List<User> contacts;
 
   @override
   Future<bool> checkAccount(String account) async => true;
@@ -117,6 +153,54 @@ class _OfflineApiService implements ApiService {
       throw const ApiException('unauthenticated');
     }
     return currentUser.copyWith(token: token);
+  }
+
+  @override
+  Future<List<User>> listContacts({required String token}) async => contacts;
+
+  @override
+  Future<User> addContact({required String token, required String account}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> createGroup({
+    required String token,
+    required String name,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> getGroup({required String token, required String groupId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> renameGroup({
+    required String token,
+    required String groupId,
+    required String name,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Group> addGroupMembers({
+    required String token,
+    required String groupId,
+    required List<String> memberIds,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<User> updateProfile({
+    required String token,
+    required String displayName,
+  }) {
+    throw UnimplementedError();
   }
 }
 
