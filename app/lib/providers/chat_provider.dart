@@ -348,17 +348,20 @@ class ChatProvider extends ChangeNotifier {
         continue;
       }
       final updated = entry.value[index].copyWith(status: status);
-      final copy = [...entry.value]..[index] = updated;
-      _messagesByConversation[entry.key] = copy;
       if (status == MessageStatus.burned) {
+        final copy = [...entry.value]..removeAt(index);
+        _messagesByConversation[entry.key] = copy;
         await _ensureDatabaseOpen();
         final database = await _databaseService();
         await database.markBurned(id);
-      } else {
-        await _ensureDatabaseOpen();
-        final database = await _databaseService();
-        await database.upsertMessage(updated);
+        notifyListeners();
+        return;
       }
+      final copy = [...entry.value]..[index] = updated;
+      _messagesByConversation[entry.key] = copy;
+      await _ensureDatabaseOpen();
+      final database = await _databaseService();
+      await database.upsertMessage(updated);
       notifyListeners();
       return;
     }
@@ -369,6 +372,13 @@ class ChatProvider extends ChangeNotifier {
     MessageStatus status,
   ) async {
     final message = _messageFromPayload(payload);
+    if (status == MessageStatus.burned) {
+      await _updateStatus(
+        message?.id ?? _messageIdFromPayload(payload),
+        status,
+      );
+      return;
+    }
     if (message != null) {
       await _upsertLocal(message.copyWith(status: status));
       return;

@@ -170,15 +170,22 @@ class SqfliteMessageStore implements MessageStore {
         'messages',
         where:
             'to_type = ? AND ((from_id = ? AND to_id = ?) OR '
-            '(from_id = ? AND to_id = ?))',
-        whereArgs: [toType.name, currentUserId, peerId, peerId, currentUserId],
+            '(from_id = ? AND to_id = ?)) AND status <> ?',
+        whereArgs: [
+          toType.name,
+          currentUserId,
+          peerId,
+          peerId,
+          currentUserId,
+          MessageStatus.burned.name,
+        ],
         orderBy: 'timestamp ASC',
       );
     }
     return _db.query(
       'messages',
-      where: 'to_type = ? AND to_id = ?',
-      whereArgs: [toType.name, peerId],
+      where: 'to_type = ? AND to_id = ? AND status <> ?',
+      whereArgs: [toType.name, peerId, MessageStatus.burned.name],
       orderBy: 'timestamp ASC',
     );
   }
@@ -277,6 +284,9 @@ class InMemoryMessageStore implements MessageStore {
     required String? currentUserId,
   }) {
     if (row['to_type'] != toType.name) {
+      return false;
+    }
+    if (row['status'] == MessageStatus.burned.name) {
       return false;
     }
     if (toType != ConversationType.user || currentUserId == null) {

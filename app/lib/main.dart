@@ -23,8 +23,8 @@ class PrivateChatApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'Private Chat',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.lightFor(settings.accentColor),
+      darkTheme: AppTheme.darkFor(settings.accentColor),
       themeMode: settings.themeMode,
       locale: Locale(settings.languageCode),
       localizationsDelegates: const [

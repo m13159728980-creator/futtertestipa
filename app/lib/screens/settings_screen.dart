@@ -118,6 +118,18 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: '聊天',
             children: [
+              _DropdownTile<AppAccentColor>(
+                title: '主题颜色',
+                value: settings.accentColor,
+                items: const {
+                  AppAccentColor.blue: '蓝色',
+                  AppAccentColor.green: '绿色',
+                  AppAccentColor.purple: '紫色',
+                  AppAccentColor.pink: '粉色',
+                  AppAccentColor.orange: '橙色',
+                },
+                onChanged: ref.read(settingsProvider).setAccentColor,
+              ),
               ListTile(
                 title: const Text('字体大小'),
                 subtitle: Slider(

@@ -181,6 +181,10 @@ class SettingsProvider extends ChangeNotifier {
     return _update(_settings.copyWith(themeMode: value));
   }
 
+  Future<void> setAccentColor(AppAccentColor value) {
+    return _update(_settings.copyWith(accentColor: value));
+  }
+
   Future<void> clearCache() {
     return _cacheService.clearCache();
   }

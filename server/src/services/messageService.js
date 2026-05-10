@@ -50,6 +50,7 @@ function createMemoryMessageRepository() {
   const groupMembers = new Map();
   const users = new Set();
   const privateBurnSettings = new Map();
+  const contacts = [];
 
   function activeGroupMemberIds(groupId) {
     return (groupMembers.get(Number(groupId)) || [])
@@ -86,6 +87,23 @@ function createMemoryMessageRepository() {
       };
       messages.push(row);
       return mapMessage(row);
+    },
+
+    async ensureContact(userId, contactId) {
+      const row = { userId: Number(userId), contactId: Number(contactId) };
+      if (!contacts.some((contact) => contact.userId === row.userId && contact.contactId === row.contactId)) {
+        contacts.push(row);
+      }
+    },
+
+    async listContactsForUser(userId) {
+      return contacts
+        .filter((contact) => contact.userId === Number(userId))
+        .map((contact) => contact.contactId);
+    },
+
+    async pushTokensForUsers() {
+      return [];
     },
 
     async findMessageById(id) {
@@ -225,6 +243,29 @@ function createPostgresMessageRepository(query = db.query) {
         [data.id || null, data.fromId, data.toId, data.toType, data.type, data.content ?? null, data.burnAfter, data.createdAt]
       );
       return mapMessage(rows[0]);
+    },
+
+    async ensureContact(userId, contactId) {
+      await query(
+        `
+          INSERT INTO contacts (user_id, contact_id)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id, contact_id) DO NOTHING
+        `,
+        [userId, contactId]
+      );
+    },
+
+    async pushTokensForUsers(userIds) {
+      const { rows } = await query(
+        `
+          SELECT token
+          FROM push_tokens
+          WHERE user_id = ANY($1::bigint[])
+        `,
+        [userIds.map(Number)]
+      );
+      return rows.map((row) => row.token);
     },
 
     async findMessageById(id) {
@@ -495,6 +536,7 @@ function createMessageService(options = {}) {
       ? createMemoryMessageRepository()
       : createPostgresMessageRepository(options.query));
   const now = options.now || (() => new Date());
+  const pushService = options.pushService;
 
   async function targetsFor(message) {
     if (message.toType === 'group') {
@@ -563,6 +605,16 @@ async function createMessage(fromId, input) {
     }
 
     const message = await repository.createMessage(data);
+    if (message.toType === 'user') {
+      await repository.ensureContact?.(message.toId, message.fromId);
+      const tokens = await repository.pushTokensForUsers?.([message.toId]);
+      await pushService?.notifyMessage?.({
+        tokens: tokens || [],
+        title: '新消息',
+        body: message.type === 'voice' ? '语音消息' : (message.content || '收到一条消息'),
+        data: { messageId: message.id, fromId: String(message.fromId) }
+      });
+    }
     return { message, targets: await targetsFor(message) };
   }
 

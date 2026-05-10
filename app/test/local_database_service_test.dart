@@ -198,7 +198,7 @@ void main() {
     expect(messages, isEmpty);
   });
 
-  test('marks messages as burned', () async {
+  test('burned messages are hidden when reopening the conversation', () async {
     await database.upsertMessage(
       _message(id: 'm1', fromId: 'alice', toId: 'bob', content: 'one'),
     );
@@ -211,7 +211,7 @@ void main() {
       currentUserId: 'alice',
     );
 
-    expect(messages.single.status, MessageStatus.burned);
+    expect(messages, isEmpty);
   });
 
   test(

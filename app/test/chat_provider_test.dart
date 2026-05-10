@@ -436,6 +436,56 @@ void main() {
   );
 
   test(
+    'backend burned message event removes the message from the open conversation',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: WebSocketService(
+          connector: (_) => throw StateError('unused'),
+        ),
+      );
+
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.send',
+          payload: {
+            'message': _message(
+              id: 'burned-message',
+              fromId: 'alice',
+              toId: 'me',
+              content: 'secret',
+            ).toJson(),
+          },
+        ),
+      );
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.burned',
+          payload: {
+            'message': _message(
+              id: 'burned-message',
+              fromId: 'alice',
+              toId: 'me',
+              content: 'secret',
+            ).copyWith(status: MessageStatus.burned).toJson(),
+          },
+        ),
+      );
+
+      expect(provider.messagesFor('alice'), isEmpty);
+
+      provider.dispose();
+      await database.close();
+    },
+  );
+
+  test(
     'localDatabaseServiceProvider decrypts existing messages with persisted master key',
     () async {
       final storage = InMemorySecureStorage();

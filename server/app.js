@@ -15,14 +15,16 @@ const { createBurnCleanupJob } = require('./src/jobs/burnCleanupJob');
 const { createGroupService } = require('./src/services/groupService');
 const { createMessageService } = require('./src/services/messageService');
 const { createMediaService } = require('./src/services/mediaService');
+const { createPushService } = require('./src/services/pushService');
 const { createUserService } = require('./src/services/userService');
 const { createSocketServer } = require('./src/websocket/socketServer');
 
 function createApp(options = {}) {
   const app = express();
   const userService = options.userService || createUserService(options);
+  const pushService = options.pushService || createPushService(options);
   const groupService = createGroupService(options);
-  const messageService = options.messageService || createMessageService(options);
+  const messageService = options.messageService || createMessageService({ ...options, pushService });
   const mediaService = options.mediaService || createMediaService(options);
   const authMiddleware = createAuthMiddleware(userService);
 
@@ -42,7 +44,8 @@ function createApp(options = {}) {
 
 if (require.main === module) {
   const userService = createUserService();
-  const messageService = createMessageService();
+  const pushService = createPushService();
+  const messageService = createMessageService({ pushService });
   const app = createApp({ userService, messageService });
   const wsHttpServer = http.createServer();
   const socketServer = createSocketServer({ server: wsHttpServer, messageService, userService });

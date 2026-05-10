@@ -1,4 +1,4 @@
-async function createNoopPushService() {
+function createNoopPushService() {
   return {
     async notifyMessage() {}
   };

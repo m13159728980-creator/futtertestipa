@@ -96,6 +96,48 @@ test('persists a private text message', async () => {
   expect(result.targets).toEqual([1, 2]);
 });
 
+test('private messages add the sender to the recipient contact list', async () => {
+  const { repository, service } = createService();
+
+  await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'hello'
+  });
+
+  await expect(repository.listContactsForUser(2)).resolves.toEqual([1]);
+});
+
+test('private messages notify recipient push tokens when available', async () => {
+  const { repository } = createService();
+  const notifications = [];
+  repository.pushTokensForUsers = async () => ['push-token-2'];
+  const service = createMessageService({
+    messageRepository: repository,
+    pushService: {
+      async notifyMessage(payload) {
+        notifications.push(payload);
+      }
+    }
+  });
+
+  await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'hello'
+  });
+
+  expect(notifications).toEqual([
+    expect.objectContaining({
+      tokens: ['push-token-2'],
+      title: '新消息',
+      body: 'hello'
+    })
+  ]);
+});
+
 test('persists client supplied message id so websocket echo replaces local draft', async () => {
   const { repository, service } = createService();
 

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.onSend,
+    this.onVoiceSend,
     this.onAttach,
     this.onStickerSelected,
     this.recentEmojiStore,
@@ -13,6 +14,7 @@ class MessageComposer extends StatefulWidget {
   });
 
   final ValueChanged<String> onSend;
+  final ValueChanged<Duration>? onVoiceSend;
   final VoidCallback? onAttach;
   final ValueChanged<StickerItem>? onStickerSelected;
   final RecentEmojiStore? recentEmojiStore;
@@ -24,6 +26,7 @@ class MessageComposer extends StatefulWidget {
 class _MessageComposerState extends State<MessageComposer> {
   final TextEditingController _controller = TextEditingController();
   _ComposerPanel _panel = _ComposerPanel.none;
+  bool _voiceMode = false;
 
   @override
   void dispose() {
@@ -42,7 +45,7 @@ class _MessageComposerState extends State<MessageComposer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              padding: const EdgeInsets.all(8),
               child: Row(
                 children: [
                   IconButton(
@@ -51,19 +54,37 @@ class _MessageComposerState extends State<MessageComposer> {
                     icon: const Icon(Icons.emoji_emotions_outlined),
                   ),
                   Expanded(
-                    child: TextField(
-                      key: const Key('message-input'),
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(8)),
-                        ),
-                      ),
-                      onSubmitted: (_) => _send(),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 160),
+                      child: _voiceMode
+                          ? _VoiceRecordBar(
+                              onSend: (duration) =>
+                                  widget.onVoiceSend?.call(duration),
+                            )
+                          : TextField(
+                              key: const Key('message-input'),
+                              controller: _controller,
+                              minLines: 1,
+                              maxLines: 5,
+                              decoration: const InputDecoration(
+                                hintText: 'Message',
+                                isDense: true,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(8),
+                                  ),
+                                ),
+                              ),
+                              onSubmitted: (_) => _send(),
+                            ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('composer-mode-toggle'),
+                    tooltip: _voiceMode ? '文字消息' : '语音消息',
+                    onPressed: () => setState(() => _voiceMode = !_voiceMode),
+                    icon: Icon(
+                      _voiceMode ? Icons.keyboard_alt_outlined : Icons.mic_none,
                     ),
                   ),
                   IconButton(
@@ -136,3 +157,19 @@ class _MessageComposerState extends State<MessageComposer> {
 }
 
 enum _ComposerPanel { none, emoji, stickers }
+
+class _VoiceRecordBar extends StatelessWidget {
+  const _VoiceRecordBar({required this.onSend});
+
+  final ValueChanged<Duration> onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      key: const Key('voice-record-bar'),
+      onPressed: () => onSend(const Duration(seconds: 1)),
+      icon: const Icon(Icons.mic),
+      label: const Text('按住说话'),
+    );
+  }
+}

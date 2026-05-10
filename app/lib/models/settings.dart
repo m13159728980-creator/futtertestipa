@@ -6,6 +6,8 @@ enum ChatEnterKeyBehavior { send, newline }
 
 enum FileAutoDownloadLimit { none, tenMb, fiftyMb, unlimited }
 
+enum AppAccentColor { blue, green, purple, pink, orange }
+
 class AppSettings {
   const AppSettings({
     this.languageCode = 'zh',
@@ -22,6 +24,7 @@ class AppSettings {
     this.wifiOnlyMediaLoading = true,
     this.fileAutoDownloadLimit = FileAutoDownloadLimit.tenMb,
     this.themeMode = ThemeMode.system,
+    this.accentColor = AppAccentColor.blue,
   });
 
   final String languageCode;
@@ -38,6 +41,7 @@ class AppSettings {
   final bool wifiOnlyMediaLoading;
   final FileAutoDownloadLimit fileAutoDownloadLimit;
   final ThemeMode themeMode;
+  final AppAccentColor accentColor;
 
   AppSettings copyWith({
     String? languageCode,
@@ -54,6 +58,7 @@ class AppSettings {
     bool? wifiOnlyMediaLoading,
     FileAutoDownloadLimit? fileAutoDownloadLimit,
     ThemeMode? themeMode,
+    AppAccentColor? accentColor,
   }) {
     return AppSettings(
       languageCode: languageCode ?? this.languageCode,
@@ -73,6 +78,7 @@ class AppSettings {
       fileAutoDownloadLimit:
           fileAutoDownloadLimit ?? this.fileAutoDownloadLimit,
       themeMode: themeMode ?? this.themeMode,
+      accentColor: accentColor ?? this.accentColor,
     );
   }
 
@@ -104,6 +110,11 @@ class AppSettings {
         json['themeMode'],
         ThemeMode.system,
       ),
+      accentColor: _enumValue(
+        AppAccentColor.values,
+        json['accentColor'],
+        AppAccentColor.blue,
+      ),
     );
   }
 
@@ -127,6 +138,7 @@ class AppSettings {
       'wifiOnlyMediaLoading': wifiOnlyMediaLoading,
       'fileAutoDownloadLimit': fileAutoDownloadLimit.name,
       'themeMode': themeMode.name,
+      'accentColor': accentColor.name,
     };
   }
 

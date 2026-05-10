@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app/models/settings.dart';
 
 class AppTheme {
   static const Color telegramBlue = Color(0xFF229ED9);
@@ -6,11 +7,12 @@ class AppTheme {
   static const Color darkBackground = Color(0xFF17212B);
   static const Color darkSurface = Color(0xFF232E3C);
 
-  static ThemeData get light {
+  static ThemeData lightFor(AppAccentColor accentColor) {
+    final seed = _seed(accentColor);
     final scheme = ColorScheme.fromSeed(
-      seedColor: telegramBlue,
+      seedColor: seed,
       brightness: Brightness.light,
-      primary: telegramBlue,
+      primary: seed,
       secondary: telegramGreen,
       surface: Colors.white,
     );
@@ -32,17 +34,18 @@ class AppTheme {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: telegramBlue, width: 2),
+          borderSide: BorderSide(color: seed, width: 2),
         ),
       ),
     );
   }
 
-  static ThemeData get dark {
+  static ThemeData darkFor(AppAccentColor accentColor) {
+    final seed = _seed(accentColor);
     final scheme = ColorScheme.fromSeed(
-      seedColor: telegramBlue,
+      seedColor: seed,
       brightness: Brightness.dark,
-      primary: telegramBlue,
+      primary: seed,
       secondary: telegramGreen,
       surface: darkSurface,
     );
@@ -64,9 +67,22 @@ class AppTheme {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: telegramBlue, width: 2),
+          borderSide: BorderSide(color: seed, width: 2),
         ),
       ),
     );
+  }
+
+  static ThemeData get light => lightFor(AppAccentColor.blue);
+  static ThemeData get dark => darkFor(AppAccentColor.blue);
+
+  static Color _seed(AppAccentColor accentColor) {
+    return switch (accentColor) {
+      AppAccentColor.blue => telegramBlue,
+      AppAccentColor.green => telegramGreen,
+      AppAccentColor.purple => const Color(0xFF7E57C2),
+      AppAccentColor.pink => const Color(0xFFE91E63),
+      AppAccentColor.orange => const Color(0xFFFF8A00),
+    };
   }
 }
