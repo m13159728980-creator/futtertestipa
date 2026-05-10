@@ -267,15 +267,14 @@ class ChatProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> sendVoice(String peerId, Duration duration) async {
-    final seconds = duration.inSeconds < 1 ? 1 : duration.inSeconds;
+  Future<void> sendVoice(String peerId, VoiceMessagePayload payload) async {
     final message = Message(
       id: _uuid.v4(),
       fromId: _currentUserId,
       toId: peerId,
       toType: ConversationType.user,
       type: MessageType.voice,
-      content: '语音 $seconds秒',
+      content: jsonEncode(payload.toJson()),
       timestamp: DateTime.now().toUtc(),
       burnAfter: _burnAfterByConversation[_key(ConversationType.user, peerId)],
       status: MessageStatus.sent,
@@ -500,6 +499,29 @@ class ChatProvider extends ChangeNotifier {
   void dispose() {
     _socketSubscription?.cancel();
     super.dispose();
+  }
+}
+
+class VoiceMessagePayload {
+  const VoiceMessagePayload({
+    required this.url,
+    required this.localPath,
+    required this.duration,
+    required this.sizeBytes,
+  });
+
+  final String url;
+  final String localPath;
+  final Duration duration;
+  final int sizeBytes;
+
+  Map<String, Object?> toJson() {
+    return {
+      'url': url,
+      'localPath': localPath,
+      'durationMs': duration.inMilliseconds,
+      'sizeBytes': sizeBytes,
+    };
   }
 }
 

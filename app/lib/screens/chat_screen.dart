@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:app/core/services/media_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
+import 'package:app/core/services/voice_recording_service.dart';
 import 'package:app/models/message.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/call_provider.dart';
@@ -31,6 +33,8 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   static const _secureWindowService = SecureWindowService();
+  final _voiceRecordingService = VoiceRecordingService();
+  final _mediaService = MediaService();
 
   @override
   void initState() {
@@ -41,6 +45,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void dispose() {
     unawaited(_secureWindowService.disable());
+    unawaited(_voiceRecordingService.dispose());
     super.dispose();
   }
 
@@ -116,12 +121,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           MessageComposer(
             onSend: (text) =>
                 ref.read(chatProvider).sendText(widget.peerId, text),
-            onVoiceSend: (duration) =>
-                ref.read(chatProvider).sendVoice(widget.peerId, duration),
+            onVoiceStart: _voiceRecordingService.start,
+            onVoiceSend: (_) => unawaited(_sendRecordedVoice()),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _sendRecordedVoice() async {
+    try {
+      final recording = await _voiceRecordingService.stop();
+      _mediaService.validateVoiceDuration(recording.duration);
+      final token = ref.read(authProvider).user?.token;
+      final remotePath = await _mediaService.upload(recording.file, token: token);
+      await ref.read(chatProvider).sendVoice(
+        widget.peerId,
+        VoiceMessagePayload(
+          url: remotePath,
+          localPath: recording.file.path,
+          duration: recording.duration,
+          sizeBytes: await recording.file.length(),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('语音发送失败: $error')),
+      );
+    }
   }
 }
 

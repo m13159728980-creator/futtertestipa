@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
     required this.onSend,
+    this.onVoiceStart,
     this.onVoiceSend,
     this.onAttach,
     this.onStickerSelected,
@@ -14,6 +15,7 @@ class MessageComposer extends StatefulWidget {
   });
 
   final ValueChanged<String> onSend;
+  final Future<void> Function()? onVoiceStart;
   final ValueChanged<Duration>? onVoiceSend;
   final VoidCallback? onAttach;
   final ValueChanged<StickerItem>? onStickerSelected;
@@ -66,6 +68,7 @@ class _MessageComposerState extends State<MessageComposer> {
                       duration: const Duration(milliseconds: 160),
                       child: _voiceMode
                           ? _VoiceRecordBar(
+                              onStart: widget.onVoiceStart,
                               onSend: (duration) =>
                                   widget.onVoiceSend?.call(duration),
                             )
@@ -159,9 +162,10 @@ class _MessageComposerState extends State<MessageComposer> {
 enum _ComposerPanel { none, emoji, stickers }
 
 class _VoiceRecordBar extends StatefulWidget {
-  const _VoiceRecordBar({required this.onSend});
+  const _VoiceRecordBar({required this.onSend, this.onStart});
 
   final ValueChanged<Duration> onSend;
+  final Future<void> Function()? onStart;
 
   @override
   State<_VoiceRecordBar> createState() => _VoiceRecordBarState();
@@ -176,7 +180,10 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
   Widget build(BuildContext context) {
     return GestureDetector(
       key: const Key('voice-record-bar'),
-      onLongPressStart: (_) => setState(() => _startedAt = DateTime.now()),
+      onLongPressStart: (_) async {
+        setState(() => _startedAt = DateTime.now());
+        await widget.onStart?.call();
+      },
       onLongPressEnd: (_) {
         final startedAt = _startedAt;
         if (startedAt == null) {

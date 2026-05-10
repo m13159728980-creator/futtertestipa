@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:app/models/message.dart';
 import 'package:app/widgets/burn_timer.dart';
+import 'package:app/widgets/media_message_tile.dart';
 import 'package:flutter/material.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -28,6 +31,9 @@ class ChatBubble extends StatelessWidget {
         : isBurned
         ? 'Message burned'
         : message.content ?? '';
+    final voicePayload = message.type == MessageType.voice && !isBurned
+        ? _voicePayload(message.content)
+        : null;
 
     return Align(
       key: const Key('chat-bubble-align'),
@@ -65,10 +71,17 @@ class ChatBubble extends StatelessWidget {
                 ],
                 AnimatedSize(
                   duration: const Duration(milliseconds: 180),
-                  child: Text(
-                    content,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  child: voicePayload == null
+                      ? Text(
+                          content,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        )
+                      : MediaMessageTile(
+                          type: MessageType.voice,
+                          localPath: voicePayload.localPath,
+                          fileSizeBytes: voicePayload.sizeBytes,
+                          duration: voicePayload.duration,
+                        ),
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -94,6 +107,44 @@ class ChatBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+_VoiceBubblePayload? _voicePayload(String? content) {
+  if (content == null || content.isEmpty) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(content);
+    if (decoded is! Map<String, dynamic>) {
+      return null;
+    }
+    return _VoiceBubblePayload(
+      localPath: decoded['localPath']?.toString(),
+      sizeBytes: decoded['sizeBytes'] is int
+          ? decoded['sizeBytes'] as int
+          : int.tryParse(decoded['sizeBytes']?.toString() ?? ''),
+      duration: Duration(
+        milliseconds:
+            decoded['durationMs'] is int
+                ? decoded['durationMs'] as int
+                : int.tryParse(decoded['durationMs']?.toString() ?? '') ?? 0,
+      ),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+class _VoiceBubblePayload {
+  const _VoiceBubblePayload({
+    required this.localPath,
+    required this.sizeBytes,
+    required this.duration,
+  });
+
+  final String? localPath;
+  final int? sizeBytes;
+  final Duration duration;
 }
 
 class _MessageStatusIcon extends StatelessWidget {

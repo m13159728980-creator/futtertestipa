@@ -193,7 +193,7 @@ void main() {
     await webSocketService.dispose();
   });
 
-  test('sends voice messages with recorded duration text', () async {
+  test('sends voice messages with uploaded media metadata', () async {
     final database = LocalDatabaseService(
       cryptoService: CryptoService(CryptoService.generateKey()),
       store: InMemoryMessageStore(),
@@ -208,11 +208,21 @@ void main() {
       webSocketService: webSocketService,
     );
 
-    await provider.sendVoice('alice', const Duration(seconds: 3));
+    await provider.sendVoice(
+      'alice',
+      const VoiceMessagePayload(
+        url: '/media/voice-1',
+        localPath: '/local/voice-1.m4a',
+        duration: Duration(seconds: 3),
+        sizeBytes: 1024,
+      ),
+    );
 
     final message = provider.messagesFor('alice').single;
     expect(message.type, MessageType.voice);
-    expect(message.content, '语音 3秒');
+    expect(message.content, contains('/media/voice-1'));
+    expect(message.content, contains('/local/voice-1.m4a'));
+    expect(message.content, contains('"durationMs":3000'));
     expect(socket.sentJson.last['payload'], containsPair('type', 'voice'));
 
     provider.dispose();

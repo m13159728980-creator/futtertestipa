@@ -65,6 +65,27 @@ void main() {
     expect(find.byKey(const Key('burn-timer-area')), findsOneWidget);
     expect(find.text('30s'), findsOneWidget);
   });
+
+  testWidgets('voice messages render a playable voice tile', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.voice,
+              content:
+                  '{"url":"/media/voice-1","durationMs":3000,"sizeBytes":2048}',
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+    expect(find.textContaining('0:03'), findsOneWidget);
+  });
 }
 
 BoxDecoration _bubbleDecoration(WidgetTester tester) {
@@ -78,6 +99,7 @@ Message _message({
   required String fromId,
   MessageType type = MessageType.text,
   Duration? burnAfter,
+  String? content,
 }) {
   return Message(
     id: 'm1',
@@ -85,7 +107,7 @@ Message _message({
     toId: 'me',
     toType: ConversationType.user,
     type: type,
-    content: 'hello',
+    content: content ?? 'hello',
     timestamp: DateTime.utc(2026, 5, 10, 1),
     burnAfter: burnAfter,
     status: MessageStatus.sent,
