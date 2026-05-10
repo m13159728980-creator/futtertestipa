@@ -233,9 +233,15 @@ class ChatProvider extends ChangeNotifier {
       currentUserId: _currentUserId,
     );
     final merged = <String, Message>{
-      for (final message in local) message.id: message,
+      for (final message in local)
+        if (message.status != MessageStatus.burned) message.id: message,
     };
     for (final message in remote) {
+      if (message.status == MessageStatus.burned) {
+        merged.remove(message.id);
+        await database.markBurned(message.id);
+        continue;
+      }
       merged[message.id] = message;
       await database.upsertMessage(message);
     }
@@ -258,6 +264,25 @@ class ChatProvider extends ChangeNotifier {
       peerId: peerId,
       text: text,
       burnAfter: burnAfter,
+    );
+  }
+
+  Future<void> sendVoice(String peerId, Duration duration) async {
+    final seconds = duration.inSeconds < 1 ? 1 : duration.inSeconds;
+    final message = Message(
+      id: _uuid.v4(),
+      fromId: _currentUserId,
+      toId: peerId,
+      toType: ConversationType.user,
+      type: MessageType.voice,
+      content: '语音 $seconds秒',
+      timestamp: DateTime.now().toUtc(),
+      burnAfter: _burnAfterByConversation[_key(ConversationType.user, peerId)],
+      status: MessageStatus.sent,
+    );
+    await _upsertLocal(message);
+    _webSocketService.send(
+      WebSocketEvent(type: 'message.send', payload: message.toJson()),
     );
   }
 

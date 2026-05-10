@@ -193,6 +193,33 @@ void main() {
     await webSocketService.dispose();
   });
 
+  test('sends voice messages with recorded duration text', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+    );
+
+    await provider.sendVoice('alice', const Duration(seconds: 3));
+
+    final message = provider.messagesFor('alice').single;
+    expect(message.type, MessageType.voice);
+    expect(message.content, '语音 3秒');
+    expect(socket.sentJson.last['payload'], containsPair('type', 'voice'));
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
   test(
     'synced private burn setting applies to later outgoing messages',
     () async {
@@ -485,6 +512,53 @@ void main() {
     },
   );
 
+  test('sync does not resurrect remotely burned messages', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final remote = _StaticMessageSyncService();
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: remote,
+      webSocketService: WebSocketService(
+        connector: (_) => throw StateError('unused'),
+      ),
+    );
+    await database.open();
+    await database.upsertMessage(
+      Message(
+        id: 'burned-sync-message',
+        fromId: 'peer',
+        toId: 'me',
+        toType: ConversationType.user,
+        type: MessageType.burn,
+        content: 'gone',
+        timestamp: DateTime.utc(2026, 5, 10),
+        burnAfter: const Duration(seconds: 5),
+        status: MessageStatus.burned,
+      ),
+    );
+    remote.messages = [
+      Message(
+        id: 'burned-sync-message',
+        fromId: 'peer',
+        toId: 'me',
+        toType: ConversationType.user,
+        type: MessageType.burn,
+        content: 'gone',
+        timestamp: DateTime.utc(2026, 5, 10),
+        burnAfter: const Duration(seconds: 5),
+        status: MessageStatus.burned,
+      ),
+    ];
+
+    await provider.loadMessages('peer');
+
+    expect(provider.messagesFor('peer'), isEmpty);
+  });
+
   test(
     'localDatabaseServiceProvider decrypts existing messages with persisted master key',
     () async {
@@ -534,6 +608,19 @@ void main() {
       secondContainer.dispose();
     },
   );
+}
+
+class _StaticMessageSyncService implements MessageSyncService {
+  List<Message> messages = const [];
+
+  @override
+  Future<List<Message>> sync({
+    required ConversationType toType,
+    required String peerId,
+    required String currentUserId,
+  }) async {
+    return messages;
+  }
 }
 
 User _user({String token = 'token-1'}) {

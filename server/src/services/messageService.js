@@ -259,13 +259,13 @@ function createPostgresMessageRepository(query = db.query) {
     async pushTokensForUsers(userIds) {
       const { rows } = await query(
         `
-          SELECT token
+          SELECT token, platform
           FROM push_tokens
           WHERE user_id = ANY($1::bigint[])
         `,
         [userIds.map(Number)]
       );
-      return rows.map((row) => row.token);
+      return rows.map((row) => ({ token: row.token, platform: row.platform }));
     },
 
     async findMessageById(id) {

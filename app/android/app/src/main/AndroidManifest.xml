@@ -1,11 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="app"
+        android:label="PrvChat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        tools:replace="android:label"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
@@ -34,6 +36,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="PUSH_APPID"
+            android:value="${GETUI_APPID}" />
+        <meta-data
+            android:name="PUSH_APPKEY"
+            android:value="${GETUI_APPKEY}" />
+        <meta-data
+            android:name="PUSH_APPSECRET"
+            android:value="${GETUI_APPSECRET}" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

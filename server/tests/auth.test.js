@@ -276,6 +276,21 @@ test('POST /api/users/me/push-token stores an Android FCM token', async () => {
   expect(user.pushToken).toEqual({ token: 'fcm-token-1', platform: 'android' });
 });
 
+test('POST /api/users/me/push-token stores a Getui client id', async () => {
+  const repository = createMemoryUserRepository();
+  const app = createApp({ userRepository: repository });
+  const registered = await register(app, 'Getui User');
+
+  const res = await request(app)
+    .post('/api/users/me/push-token')
+    .set('Authorization', `Bearer ${registered.token}`)
+    .send({ token: 'getui-cid-1', platform: 'getui' });
+
+  expect(res.status).toBe(204);
+  const user = await repository.findActiveById(registered.user.id);
+  expect(user.pushToken).toEqual({ token: 'getui-cid-1', platform: 'getui' });
+});
+
 test('DELETE /api/users/me rejects missing confirmation', async () => {
   const app = createTestApp();
   const registerRes = await register(app);

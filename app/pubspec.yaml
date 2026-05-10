@@ -52,6 +52,7 @@ dependencies:
   permission_handler: ^11.3.1
   flutter_webrtc: ^0.12.5
   intl: ^0.20.2
+  getuiflut: ^0.2.40
 
 dev_dependencies:
   flutter_test:

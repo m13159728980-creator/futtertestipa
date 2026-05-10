@@ -268,7 +268,7 @@ function createUserService(options = {}) {
     if (!normalizedToken) {
       throw new UserServiceError('Push token is required', 400);
     }
-    if (!['android', 'ios', 'web'].includes(normalizedPlatform)) {
+    if (!['android', 'ios', 'web', 'getui'].includes(normalizedPlatform)) {
       throw new UserServiceError('Invalid push token platform', 400);
     }
     await repository.upsertPushToken(userId, normalizedToken, normalizedPlatform);

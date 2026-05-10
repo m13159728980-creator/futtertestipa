@@ -22,7 +22,7 @@ class PrivateChatApp extends ConsumerWidget {
     final settings = ref.watch(settingsProvider).settings;
 
     return MaterialApp(
-      title: 'Private Chat',
+      title: 'PrvChat',
       theme: AppTheme.lightFor(settings.accentColor),
       darkTheme: AppTheme.darkFor(settings.accentColor),
       themeMode: settings.themeMode,
@@ -87,13 +87,13 @@ class AppLocalizations {
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'en': {
-      'appTitle': 'Private Chat',
+      'appTitle': 'PrvChat',
       'chat': 'Chat',
       'settings': 'Settings',
       'connectionStatus': 'Connection status',
     },
     'zh': {
-      'appTitle': 'Private Chat',
+      'appTitle': 'PrvChat',
       'chat': '聊天',
       'settings': '设置',
       'connectionStatus': '连接状态',

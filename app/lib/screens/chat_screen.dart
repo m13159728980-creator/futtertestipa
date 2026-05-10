@@ -116,6 +116,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           MessageComposer(
             onSend: (text) =>
                 ref.read(chatProvider).sendText(widget.peerId, text),
+            onVoiceSend: (duration) =>
+                ref.read(chatProvider).sendVoice(widget.peerId, duration),
           ),
         ],
       ),

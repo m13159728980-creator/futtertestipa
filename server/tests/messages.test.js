@@ -426,6 +426,25 @@ test('sync returns messages from the last 7 days only', async () => {
   expect(messages.map((message) => message.id)).toEqual([recent.message.id, boundary.message.id]);
 });
 
+test('sync excludes burned messages so clients cannot resurrect them', async () => {
+  let current = new Date('2026-05-10T12:00:00.000Z');
+  const { service } = createService(() => current);
+  const { message } = await service.createMessage(1, {
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'burned',
+    burnAfter: 5
+  });
+  await service.startBurn(message.id, 2);
+  current = new Date('2026-05-10T12:00:06.000Z');
+  await service.expireBurnedMessages();
+
+  const messages = await service.syncMessages(2);
+
+  expect(messages.map((item) => item.id)).not.toContain(message.id);
+});
+
 test('POST /api/messages/sync is authenticated and returns relevant messages', async () => {
   const userRepository = createMemoryUserRepository();
   const messageRepository = createMemoryMessageRepository();

@@ -49,6 +49,14 @@ class _MessageComposerState extends State<MessageComposer> {
               child: Row(
                 children: [
                   IconButton(
+                    key: const Key('composer-mode-toggle'),
+                    tooltip: _voiceMode ? '文字消息' : '语音消息',
+                    onPressed: () => setState(() => _voiceMode = !_voiceMode),
+                    icon: Icon(
+                      _voiceMode ? Icons.keyboard_alt_outlined : Icons.mic_none,
+                    ),
+                  ),
+                  IconButton(
                     tooltip: 'Emoji',
                     onPressed: () => _togglePanel(_ComposerPanel.emoji),
                     icon: const Icon(Icons.emoji_emotions_outlined),
@@ -77,14 +85,6 @@ class _MessageComposerState extends State<MessageComposer> {
                               ),
                               onSubmitted: (_) => _send(),
                             ),
-                    ),
-                  ),
-                  IconButton(
-                    key: const Key('composer-mode-toggle'),
-                    tooltip: _voiceMode ? '文字消息' : '语音消息',
-                    onPressed: () => setState(() => _voiceMode = !_voiceMode),
-                    icon: Icon(
-                      _voiceMode ? Icons.keyboard_alt_outlined : Icons.mic_none,
                     ),
                   ),
                   IconButton(
@@ -158,18 +158,57 @@ class _MessageComposerState extends State<MessageComposer> {
 
 enum _ComposerPanel { none, emoji, stickers }
 
-class _VoiceRecordBar extends StatelessWidget {
+class _VoiceRecordBar extends StatefulWidget {
   const _VoiceRecordBar({required this.onSend});
 
   final ValueChanged<Duration> onSend;
 
   @override
+  State<_VoiceRecordBar> createState() => _VoiceRecordBarState();
+}
+
+class _VoiceRecordBarState extends State<_VoiceRecordBar> {
+  DateTime? _startedAt;
+
+  bool get _recording => _startedAt != null;
+
+  @override
   Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
+    return GestureDetector(
       key: const Key('voice-record-bar'),
-      onPressed: () => onSend(const Duration(seconds: 1)),
-      icon: const Icon(Icons.mic),
-      label: const Text('按住说话'),
+      onLongPressStart: (_) => setState(() => _startedAt = DateTime.now()),
+      onLongPressEnd: (_) {
+        final startedAt = _startedAt;
+        if (startedAt == null) {
+          return;
+        }
+        final duration = DateTime.now().difference(startedAt);
+        setState(() => _startedAt = null);
+        widget.onSend(
+          duration < const Duration(seconds: 1)
+              ? const Duration(seconds: 1)
+              : duration,
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _recording
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(_recording ? Icons.graphic_eq : Icons.mic),
+            const SizedBox(width: 8),
+            Text(_recording ? '松开发送' : '按住说话'),
+          ],
+        ),
+      ),
     );
   }
 }
