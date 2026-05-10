@@ -7,7 +7,7 @@ Date: 2026-05-10
 | File | Size | Notes |
 | --- | ---: | --- |
 | `dist/private-chat-debug.apk` | 179.54 MB | Debug APK, LAN server build |
-| `dist/private-chat-release.apk` | 79.66 MB | Release APK, public domain build with INTERNET permission |
+| `dist/private-chat-release.apk` | 81.81 MB | Release APK, public domain build with INTERNET permission |
 
 ## Current Endpoints
 
@@ -23,6 +23,9 @@ Date: 2026-05-10
 - Contacts are added by 10 digit ID.
 - Chat list and settings display `ID: 10 digits`.
 - The account creation and chat list UI were simplified.
+- Message delivery now keeps the client-generated UUID on the server, so sender echoes replace the local draft instead of duplicating it.
+- Chat screens now sync the last 7 days of messages from `/api/messages/sync` when opened, so missed realtime events are recovered.
+- The main chat list was refreshed with a cleaner Material layout, account header, search field, clearer contact/group sections, and simpler new-chat actions.
 
 ## Debug APK
 

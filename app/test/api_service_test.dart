@@ -145,10 +145,36 @@ void main() {
       );
 
       expect(captured.method, 'PATCH');
-      expect(captured.url.toString(), 'https://example.test/api/users/me/profile');
+      expect(
+        captured.url.toString(),
+        'https://example.test/api/users/me/profile',
+      );
       expect(captured.body, '{"displayName":"New Name"}');
       expect(user.displayName, 'New Name');
       expect(user.token, 'token-1');
+    });
+
+    test('syncs messages and maps backend payloads', () async {
+      final service = HttpApiService(
+        baseUrl: 'https://example.test/api',
+        client: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(
+            request.url.toString(),
+            'https://example.test/api/messages/sync',
+          );
+          expect(request.headers['Authorization'], 'Bearer token-1');
+          return http.Response(
+            '{"messages":[{"id":"11111111-1111-4111-8111-111111111111","fromId":2,"toId":1,"toType":"user","type":"text","content":"hello","timestamp":"2026-05-10T00:00:00.000Z","burnAfter":0,"status":"sent"}]}',
+            200,
+          );
+        }),
+      );
+
+      final messages = await service.syncMessages(token: 'token-1');
+
+      expect(messages.single.id, '11111111-1111-4111-8111-111111111111');
+      expect(messages.single.content, 'hello');
     });
   });
 }

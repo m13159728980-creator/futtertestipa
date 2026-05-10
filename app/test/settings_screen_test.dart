@@ -298,4 +298,7 @@ class _FakeApiService implements ApiService {
     profileNames.add(displayName);
     return _testUser.copyWith(displayName: displayName, token: token);
   }
+
+  @override
+  Future<List<Message>> syncMessages({required String token}) async => const [];
 }

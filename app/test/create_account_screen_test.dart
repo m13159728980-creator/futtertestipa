@@ -2,6 +2,7 @@ import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/models/user.dart';
 import 'package:app/models/group.dart';
+import 'package:app/models/message.dart';
 import 'package:app/screens/create_account_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -130,4 +131,7 @@ class _FakeApiService implements ApiService {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<Message>> syncMessages({required String token}) async => const [];
 }

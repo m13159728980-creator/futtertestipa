@@ -96,6 +96,22 @@ test('persists a private text message', async () => {
   expect(result.targets).toEqual([1, 2]);
 });
 
+test('persists client supplied message id so websocket echo replaces local draft', async () => {
+  const { repository, service } = createService();
+
+  const result = await service.createMessage(1, {
+    id: '11111111-1111-4111-8111-111111111111',
+    toId: 2,
+    toType: 'user',
+    type: 'text',
+    content: 'hello',
+    burnAfter: 0
+  });
+
+  expect(result.message.id).toBe('11111111-1111-4111-8111-111111111111');
+  await expect(repository.findMessageById('11111111-1111-4111-8111-111111111111')).resolves.toEqual(result.message);
+});
+
 test('group message fan-out target list includes active members', async () => {
   const { repository, service } = createService();
   repository.setGroupMembers(10, [

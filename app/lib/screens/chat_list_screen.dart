@@ -19,8 +19,10 @@ class ChatListScreen extends ConsumerWidget {
     final social = ref.watch(socialProvider);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('聊天'),
+        centerTitle: false,
         actions: [
           IconButton(
             tooltip: '设置',
@@ -34,20 +36,21 @@ class ChatListScreen extends ConsumerWidget {
       body: RefreshIndicator(
         onRefresh: () => ref.read(socialProvider).load(),
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 96),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
           children: [
             _AccountHeader(user: user),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: SearchBar(
-                leading: Icon(Icons.search),
-                hintText: '搜索名字或ID',
-              ),
+            const SizedBox(height: 12),
+            const SearchBar(
+              leading: Icon(Icons.search),
+              hintText: '搜索名字或ID',
+              elevation: WidgetStatePropertyAll(0),
+              backgroundColor: WidgetStatePropertyAll(Color(0xFFF2F4F7)),
             ),
+            const SizedBox(height: 12),
             if (social.isLoading) const LinearProgressIndicator(),
             if (social.errorMessage != null)
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   social.errorMessage!,
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -58,10 +61,10 @@ class ChatListScreen extends ConsumerWidget {
             else ...[
               if (social.contacts.isNotEmpty) const _SectionHeader('联系人'),
               for (final contact in social.contacts)
-                ListTile(
-                  leading: DefaultAvatar(index: contact.avatarIndex),
-                  title: Text(contact.displayName),
-                  subtitle: Text('ID: ${contact.account}'),
+                _ConversationTile(
+                  avatar: DefaultAvatar(index: contact.avatarIndex),
+                  title: contact.displayName,
+                  subtitle: 'ID: ${contact.account}',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => ChatScreen(
@@ -73,10 +76,11 @@ class ChatListScreen extends ConsumerWidget {
                 ),
               if (social.groups.isNotEmpty) const _SectionHeader('群聊'),
               for (final group in social.groups)
-                ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.group)),
-                  title: Text(group.name),
-                  subtitle: Text('${group.members.length} 人 · 群ID ${group.groupCode}'),
+                _ConversationTile(
+                  avatar: const CircleAvatar(child: Icon(Icons.group)),
+                  title: group.name,
+                  subtitle:
+                      '${group.members.length} 人 · 群ID ${group.groupCode}',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => GroupScreen(groupId: group.id),
@@ -87,10 +91,11 @@ class ChatListScreen extends ConsumerWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         tooltip: '新建',
         onPressed: () => _showNewChatActions(context, ref),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('新建'),
       ),
     );
   }
@@ -106,6 +111,7 @@ class ChatListScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.person_add_alt_1_outlined),
               title: const Text('添加好友'),
+              subtitle: const Text('输入对方10位数字ID'),
               onTap: () {
                 Navigator.of(context).pop();
                 _showAddContactDialog(context, ref);
@@ -114,6 +120,7 @@ class ChatListScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.group_add_outlined),
               title: const Text('创建群聊'),
+              subtitle: const Text('从联系人中选择成员'),
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
@@ -129,7 +136,10 @@ class ChatListScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showAddContactDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showAddContactDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final controller = TextEditingController();
     String? errorText;
     var saving = false;
@@ -288,10 +298,9 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       _errorText = null;
     });
     try {
-      final group = await ref.read(socialProvider).createGroup(
-            name: name,
-            memberIds: _selectedIds.toList(),
-          );
+      final group = await ref
+          .read(socialProvider)
+          .createGroup(name: name, memberIds: _selectedIds.toList());
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
@@ -315,24 +324,68 @@ class _AccountHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      leading: DefaultAvatar(index: user?.avatarIndex ?? 0, radius: 24),
-      title: Text(user?.displayName ?? ''),
-      subtitle: Text(user == null ? '' : 'ID: ${user!.account}'),
-      trailing: IconButton(
-        tooltip: '复制ID',
-        onPressed: user == null
-            ? null
-            : () async {
-                await Clipboard.setData(ClipboardData(text: user!.account));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('ID已复制')),
-                  );
-                }
-              },
-        icon: const Icon(Icons.copy_outlined),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.primaryContainer.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: DefaultAvatar(index: user?.avatarIndex ?? 0, radius: 24),
+        title: Text(
+          user?.displayName ?? '',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        subtitle: Text(user == null ? '' : 'ID: ${user!.account}'),
+        trailing: IconButton(
+          tooltip: '复制ID',
+          onPressed: user == null
+              ? null
+              : () async {
+                  await Clipboard.setData(ClipboardData(text: user!.account));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('ID已复制')));
+                  }
+                },
+          icon: const Icon(Icons.copy_outlined),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationTile extends StatelessWidget {
+  const _ConversationTile({
+    required this.avatar,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final Widget avatar;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      elevation: 0,
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: avatar,
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
       ),
     );
   }
@@ -346,12 +399,13 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+      padding: const EdgeInsets.fromLTRB(4, 18, 4, 6),
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -362,13 +416,22 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(32),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
-          Icon(Icons.chat_bubble_outline, size: 48),
-          SizedBox(height: 12),
-          Text('添加好友后开始聊天'),
+          Icon(
+            Icons.forum_outlined,
+            size: 52,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 12),
+          Text('添加好友后开始聊天', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            '点击右下角新建按钮添加好友或创建群聊',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );

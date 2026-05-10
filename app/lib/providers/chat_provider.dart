@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
@@ -29,7 +30,10 @@ final messageStoreProvider = Provider<MessageStore>((ref) {
 });
 
 final messageSyncServiceProvider = Provider<MessageSyncService>((ref) {
-  return NoopMessageSyncService();
+  return ApiMessageSyncService(
+    apiService: ref.watch(apiServiceProvider),
+    auth: ref.watch(authProvider),
+  );
 });
 
 final chatProvider = ChangeNotifierProvider<ChatProvider>((ref) {
@@ -66,6 +70,42 @@ class NoopMessageSyncService implements MessageSyncService {
     required String currentUserId,
   }) async {
     return const [];
+  }
+}
+
+class ApiMessageSyncService implements MessageSyncService {
+  const ApiMessageSyncService({
+    required ApiService apiService,
+    required AuthProvider auth,
+  }) : _apiService = apiService,
+       _auth = auth;
+
+  final ApiService _apiService;
+  final AuthProvider _auth;
+
+  @override
+  Future<List<Message>> sync({
+    required ConversationType toType,
+    required String peerId,
+    required String currentUserId,
+  }) async {
+    final token = _auth.user?.token;
+    if (token == null || token.isEmpty) {
+      return const [];
+    }
+    final messages = await _apiService.syncMessages(token: token);
+    return messages
+        .where((message) {
+          if (message.toType != toType) {
+            return false;
+          }
+          if (toType == ConversationType.group) {
+            return message.toId == peerId;
+          }
+          return (message.fromId == currentUserId && message.toId == peerId) ||
+              (message.fromId == peerId && message.toId == currentUserId);
+        })
+        .toList(growable: false);
   }
 }
 

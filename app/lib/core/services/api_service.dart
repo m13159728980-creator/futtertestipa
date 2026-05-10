@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app/core/config/app_config.dart';
 import 'package:app/models/group.dart';
+import 'package:app/models/message.dart';
 import 'package:app/models/user.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -24,10 +25,7 @@ abstract interface class ApiService {
 
   Future<List<User>> listContacts({required String token});
 
-  Future<User> addContact({
-    required String token,
-    required String account,
-  });
+  Future<User> addContact({required String token, required String account});
 
   Future<Group> createGroup({
     required String token,
@@ -35,10 +33,7 @@ abstract interface class ApiService {
     required List<String> memberIds,
   });
 
-  Future<Group> getGroup({
-    required String token,
-    required String groupId,
-  });
+  Future<Group> getGroup({required String token, required String groupId});
 
   Future<Group> renameGroup({
     required String token,
@@ -56,6 +51,8 @@ abstract interface class ApiService {
     required String token,
     required String displayName,
   });
+
+  Future<List<Message>> syncMessages({required String token});
 }
 
 class ApiException implements Exception {
@@ -260,6 +257,22 @@ class HttpApiService implements ApiService {
       throw ApiException(_message(body));
     }
     return User.fromJson(body['user'] as Map<String, dynamic>, token: token);
+  }
+
+  @override
+  Future<List<Message>> syncMessages({required String token}) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/messages/sync'),
+      headers: _jsonHeaders(token: token),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return [
+      for (final item in (body['messages'] as List? ?? const []))
+        if (item is Map<String, dynamic>) Message.fromJson(item),
+    ];
   }
 
   Map<String, String> _jsonHeaders({String? token}) {

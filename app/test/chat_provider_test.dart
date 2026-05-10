@@ -13,6 +13,8 @@ import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/chat_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:uuid/data.dart';
+import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
@@ -232,6 +234,51 @@ void main() {
   );
 
   test(
+    'server echo with same message id replaces the local sent message instead of duplicating it',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+        uuid: const _FixedUuid('11111111-1111-4111-8111-111111111111'),
+      );
+
+      await provider.sendText('alice', 'hello');
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.send',
+          payload: {
+            'message': _message(
+              id: '11111111-1111-4111-8111-111111111111',
+              fromId: 'me',
+              toId: 'alice',
+              content: 'hello',
+            ).copyWith(status: MessageStatus.delivered).toJson(),
+          },
+        ),
+      );
+
+      expect(provider.messagesFor('alice'), hasLength(1));
+      expect(
+        provider.messagesFor('alice').single.status,
+        MessageStatus.delivered,
+      );
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
+
+  test(
     'backend message.read and message.revoke with payload.message update status',
     () async {
       final database = LocalDatabaseService(
@@ -436,6 +483,11 @@ class _FakeApiService implements ApiService {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<Message>> syncMessages({required String token}) {
+    throw UnimplementedError();
+  }
 }
 
 class _FakeWebSocketChannel implements WebSocketChannel {
@@ -496,11 +548,21 @@ class _FakeWebSocketSink implements WebSocketSink {
   Future get done => Future.value();
 }
 
+class _FixedUuid extends Uuid {
+  const _FixedUuid(this.value);
+
+  final String value;
+
+  @override
+  String v4({Map<String, dynamic>? options, V4Options? config}) => value;
+}
+
 Message _message({
   required String id,
   String fromId = 'alice',
   required String toId,
-  required ConversationType toType,
+  ConversationType toType = ConversationType.user,
+  String? content,
 }) {
   return Message(
     id: id,
@@ -508,7 +570,7 @@ Message _message({
     toId: toId,
     toType: toType,
     type: MessageType.text,
-    content: id,
+    content: content ?? id,
     timestamp: DateTime.utc(2026, 5, 10, 1),
     status: MessageStatus.sent,
   );

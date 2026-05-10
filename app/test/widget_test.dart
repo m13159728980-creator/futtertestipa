@@ -8,6 +8,7 @@ import 'package:app/core/services/websocket_service.dart';
 import 'package:app/main.dart';
 import 'package:app/models/user.dart';
 import 'package:app/models/group.dart';
+import 'package:app/models/message.dart';
 import 'package:app/providers/chat_provider.dart';
 import 'package:app/screens/create_account_screen.dart';
 import 'package:flutter/material.dart';
@@ -202,6 +203,9 @@ class _OfflineApiService implements ApiService {
   }) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<Message>> syncMessages({required String token}) async => const [];
 }
 
 User _user({String token = 'token-1'}) {

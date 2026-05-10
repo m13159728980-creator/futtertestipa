@@ -6,6 +6,7 @@ const SYNC_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const VALID_TO_TYPES = new Set(['user', 'group']);
 const VALID_TYPES = new Set(['text', 'image', 'voice', 'file', 'sticker', 'call_event', 'revoked', 'burn']);
 const VALID_BURN_AFTER = new Set([0, 5, 10, 30, 60]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class MessageServiceError extends Error {
   constructor(message, statusCode) {
@@ -200,11 +201,11 @@ function createPostgresMessageRepository(query = db.query) {
     async createMessage(data) {
       const { rows } = await query(
         `
-          INSERT INTO messages (from_id, to_id, to_type, type, content, burn_after, created_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          INSERT INTO messages (id, from_id, to_id, to_type, type, content, burn_after, created_at)
+          VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8)
           RETURNING id, from_id, to_id, to_type, type, content, burn_after, burn_started_at, status, created_at, deleted_at
         `,
-        [data.fromId, data.toId, data.toType, data.type, data.content ?? null, data.burnAfter, data.createdAt]
+        [data.id || null, data.fromId, data.toId, data.toType, data.type, data.content ?? null, data.burnAfter, data.createdAt]
       );
       return mapMessage(rows[0]);
     },
@@ -384,11 +385,15 @@ function createPostgresMessageRepository(query = db.query) {
 }
 
 function normalizeMessageInput(fromId, input, now) {
+  const id = typeof input?.id === 'string' && input.id.trim() ? input.id.trim() : undefined;
   const toId = Number(input?.toId);
   const toType = input?.toType || 'user';
   const type = input?.type || 'text';
   const burnAfter = Number(input?.burnAfter ?? input?.burn_after ?? 0);
 
+  if (id && !UUID_PATTERN.test(id)) {
+    throw new MessageServiceError('Invalid message id', 400);
+  }
   if (!Number.isInteger(Number(fromId)) || !Number.isInteger(toId)) {
     throw new MessageServiceError('Invalid message participants', 400);
   }
@@ -403,6 +408,7 @@ function normalizeMessageInput(fromId, input, now) {
   }
 
   return {
+    id,
     fromId: Number(fromId),
     toId,
     toType,
