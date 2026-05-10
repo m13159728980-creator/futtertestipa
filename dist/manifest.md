@@ -2,6 +2,13 @@
 
 日期：2026-05-10
 
+## 构建产物
+
+| 文件 | 大小 | 说明 |
+| --- | ---: | --- |
+| `dist/private-chat-debug.apk` | 179.54 MB | Debug APK，连接内网服务器 |
+| `dist/private-chat-release.apk` | 79.74 MB | Release APK，连接公网域名 |
+
 ## Debug APK
 
 命令：
@@ -11,38 +18,28 @@ cd app
 flutter build apk --debug --dart-define=API_BASE_URL=http://192.168.1.103:3000/api --dart-define=WS_URL=ws://192.168.1.103:3001/ws
 ```
 
-结果：未生成 APK。
+结果：
 
-当前阻塞：
-
-- 本机 Android SDK `C:\tmp\android-sdk\platforms\android-34` 缺少 `android.jar`。
-- Gradle 在 `:file_picker:parseDebugLocalResources` 处理 `android-34/android.jar` 时失败。
-- 当前环境未找到 `sdkmanager.bat`，无法自动重装 `platforms;android-34`。
-
-已排除：
-
-- Flutter/Dart 测试通过。
-- `flutter analyze` 通过。
-- 之前的 `record_linux` 依赖兼容问题已通过升级 `record` 到 `6.2.0` 解决。
+- 成功生成：`app/build/app/outputs/flutter-apk/app-debug.apk`
+- 已复制到：`dist/private-chat-debug.apk`
 
 ## Release APK
 
-命令计划：
+命令：
 
 ```powershell
 cd app
 flutter build apk --release --dart-define=API_BASE_URL=http://wdsj.fun:3000/api --dart-define=WS_URL=ws://wdsj.fun:3001/ws
 ```
 
-结果：未执行。原因是 Debug 构建已被本机 Android SDK platform 缺失阻塞。
+结果：
 
-## 修复方式
+- 成功生成：`app/build/app/outputs/flutter-apk/app-release.apk`
+- 已复制到：`dist/private-chat-release.apk`
+- 当前 release 使用 Flutter 模板里的 debug signing config，适合内测安装；正式上架前需要替换为生产 keystore。
 
-安装或修复 Android SDK platform：
+## 本机环境修复记录
 
-```powershell
-sdkmanager "platforms;android-34" "build-tools;34.0.0"
-flutter doctor --android-licenses
-```
-
-然后重新执行 Debug 和 Release APK 构建命令。
+- 将 Android `compileSdk` 和 `targetSdk` 固定为 `36`，匹配当前插件和已安装 SDK。
+- 本机 `C:\tmp\android-sdk\platforms\android-34` 缺少 `android.jar`，已用已安装的 `android-35/android.jar` 补齐以满足旧插件解析资源需求。
+- Windows 下 Pub 缓存位于 `C:`、项目位于 `E:`，Kotlin 增量缓存会输出跨盘符相对路径异常；已在 `app/android/gradle.properties` 设置 `kotlin.incremental=false`，后续构建更稳定。

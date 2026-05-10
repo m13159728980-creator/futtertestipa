@@ -9,44 +9,74 @@
 - 工作目录：`/home/eapp/chat_server`
 - 公网域名：`wdsj.fun`
 
-## 已执行检查
+## 已执行
+
+本机安装 PuTTY 工具链后，使用 `plink/pscp` 以非交互方式完成部署：
 
 ```powershell
-Get-Command ssh
-Get-Command scp
-Test-NetConnection 192.168.1.103 -Port 22
-Get-Command sshpass
-Get-Command plink
-Get-Command pscp
-Get-Module -ListAvailable Posh-SSH
+winget install --id PuTTY.PuTTY -e --accept-package-agreements --accept-source-agreements
+```
+
+远端主机密钥：
+
+```text
+ssh-ed25519 255 SHA256:7jTUgblTmQBg0cH1JPcpKjIJBTte/vpK2pyfmctUVIs
+```
+
+部署过程：
+
+- 创建并授权 `/home/eapp/chat_server`。
+- 上传服务端代码到临时目录 `/home/eapp/chat_server_upload`。
+- 以 sudo 执行 `deploy.sh`。
+- 安装 Node.js/npm/PostgreSQL/ufw/rsync 等依赖。
+- 创建 PostgreSQL 数据库 `private_chat` 和用户 `chat_user`。
+- 执行 migration：`001_initial.sql`。
+- 创建并启动 systemd 服务：`chat-server.service`。
+- 开放防火墙端口：TCP `3000`、TCP `3001`、UDP `5000-6000`。
+
+## 验证结果
+
+远端本机：
+
+```bash
+curl -fsS http://127.0.0.1:3000/api/health
+systemctl is-active chat-server
+ss -lntu | grep -E ':(3000|3001)\b'
 ```
 
 结果：
 
-- Windows OpenSSH `ssh.exe` 和 `scp.exe` 可用。
-- `192.168.1.103:22` TCP 可达。
-- 当前非交互环境没有 `sshpass`、`plink`、`pscp` 或 `Posh-SSH`，无法自动输入密码执行部署。
-
-## 阻塞项
-
-本环境不能完成非交互密码 SSH 部署。需要以下任一条件：
-
-- 在终端手动执行命令并输入密码。
-- 为 `eapp@192.168.1.103` 配置 SSH key。
-- 安装可用的非交互 SSH 工具。
-
-## 手动部署命令
-
-```powershell
-scp -r server eapp@192.168.1.103:/home/eapp/chat_server
-ssh eapp@192.168.1.103 "cd /home/eapp/chat_server && chmod +x deploy.sh && ./deploy.sh"
-curl http://192.168.1.103:3000/api/health
-curl http://wdsj.fun:3000/api/health
+```text
+{"ok":true}
+active
+*:3000 LISTEN
+*:3001 LISTEN
 ```
 
-预期：
+本机访问：
 
-- `deploy.sh` 安装依赖、初始化 PostgreSQL、运行 migration、安装 systemd 服务。
-- 防火墙开放 TCP `3000`、TCP `3001`、UDP `5000-6000`。
-- LAN health 返回 `{"ok":true}`。
-- `wdsj.fun` health 取决于 DNS、路由器端口转发和公网防火墙。
+```powershell
+Invoke-WebRequest -UseBasicParsing http://192.168.1.103:3000/api/health
+Invoke-WebRequest -UseBasicParsing http://wdsj.fun:3000/api/health
+```
+
+结果：
+
+- `http://192.168.1.103:3000/api/health` 返回 `200 {"ok":true}`
+- `http://wdsj.fun:3000/api/health` 返回 `200 {"ok":true}`
+- `wdsj.fun` 当前解析到 `122.138.97.22`
+
+## 运行信息
+
+- 服务目录：`/home/eapp/chat_server`
+- systemd 服务名：`chat-server`
+- API：`http://192.168.1.103:3000/api` 或 `http://wdsj.fun:3000/api`
+- WebSocket：`ws://192.168.1.103:3001/ws` 或 `ws://wdsj.fun:3001/ws`
+
+常用维护命令：
+
+```bash
+sudo systemctl status chat-server --no-pager
+sudo journalctl -u chat-server -n 100 --no-pager
+sudo systemctl restart chat-server
+```
