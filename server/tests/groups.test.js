@@ -72,7 +72,7 @@ async function createGroup(app, ownerToken, memberIds, name = 'Friends') {
   return res.body.group;
 }
 
-test('POST /api/contacts adds a contact by account', async () => {
+test('POST /api/contacts adds a contact by 10 digit user ID', async () => {
   const app = createTestApp();
   const owner = await register(app, '@OWNER', 'Owner');
   const friend = await register(app, '@FRIEND', 'Friend');
@@ -80,13 +80,13 @@ test('POST /api/contacts adds a contact by account', async () => {
   const addRes = await request(app)
     .post('/api/contacts')
     .set('Authorization', `Bearer ${owner.token}`)
-    .send({ account: '@FRIEND' });
+    .send({ account: friend.user.account });
 
   expect(addRes.status).toBe(201);
   expect(addRes.body).toEqual({
     contact: {
       id: friend.user.id,
-      account: '@FRIEND',
+      account: friend.user.account,
       displayName: 'Friend',
       avatarIndex: friend.user.avatarIndex
     }
@@ -95,7 +95,7 @@ test('POST /api/contacts adds a contact by account', async () => {
   const duplicateRes = await request(app)
     .post('/api/contacts')
     .set('Authorization', `Bearer ${owner.token}`)
-    .send({ account: '@FRIEND' });
+    .send({ id: friend.user.account });
 
   expect(duplicateRes.status).toBe(200);
 

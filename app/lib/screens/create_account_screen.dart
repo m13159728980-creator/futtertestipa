@@ -15,18 +15,14 @@ class CreateAccountScreen extends ConsumerStatefulWidget {
 
 class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   final _nameController = TextEditingController();
-  final _accountController = TextEditingController();
 
   bool _submitted = false;
   bool _registering = false;
-  bool? _accountAvailable;
   String? _remoteError;
-  int _accountCheckGeneration = 0;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _accountController.dispose();
     super.dispose();
   }
 
@@ -34,65 +30,63 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final nameError = _nameError;
-    final accountError = _accountError;
     final canSubmit = _canSubmit;
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const SizedBox(height: 32),
-            const Center(child: DefaultAvatar(index: 0, radius: 40)),
-            const SizedBox(height: 16),
-            Text(
-              '欢迎',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(24),
+              children: [
+                const Center(child: DefaultAvatar(index: 0, radius: 36)),
+                const SizedBox(height: 16),
+                Text(
+                  '欢迎',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 28),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: '名字',
+                    errorText: _submitted || _nameController.text.isNotEmpty
+                        ? nameError
+                        : null,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setState(() => _remoteError = null),
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '系统会自动生成10位数字ID，可用来添加好友。',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                if (_remoteError != null || auth.errorMessage != null)
+                  Text(
+                    _remoteError ?? auth.errorMessage!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    textAlign: TextAlign.center,
+                  ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: canSubmit ? _submit : null,
+                  child: _registering
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('开始聊天'),
+                ),
+              ],
             ),
-            const SizedBox(height: 32),
-            TextFormField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: '名字',
-                errorText: _submitted ||
-                        _nameController.text.isNotEmpty ||
-                        _accountController.text.isNotEmpty
-                    ? nameError
-                    : null,
-              ),
-              textInputAction: TextInputAction.next,
-              onChanged: (_) => setState(() => _remoteError = null),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _accountController,
-              decoration: InputDecoration(
-                labelText: '账号',
-                errorText: accountError,
-                prefixIcon: const Icon(Icons.alternate_email),
-              ),
-              textInputAction: TextInputAction.done,
-              onChanged: _onAccountChanged,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            if (_remoteError != null || auth.errorMessage != null)
-              Text(
-                _remoteError ?? auth.errorMessage!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: canSubmit ? _submit : null,
-              child: _registering
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('开始聊天'),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -102,51 +96,9 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     return AccountValidator.validateDisplayName(_nameController.text);
   }
 
-  String? get _accountError {
-    final localError = AccountValidator.validateAccount(
-      _accountController.text,
-    );
-    if (localError != null) {
-      return _accountController.text.isEmpty ? null : localError;
-    }
-    if (_accountAvailable == false) {
-      return '账号已被注册';
-    }
-    return null;
-  }
-
-  bool get _isFormValid {
-    return _nameError == null &&
-        AccountValidator.validateAccount(_accountController.text) == null &&
-        _accountAvailable != false;
-  }
+  bool get _isFormValid => _nameError == null;
 
   bool get _canSubmit => _isFormValid && !_registering;
-
-  Future<void> _onAccountChanged(String value) async {
-    setState(() {
-      _accountAvailable = null;
-      _remoteError = null;
-    });
-
-    if (AccountValidator.validateAccount(value) != null) {
-      return;
-    }
-
-    final generation = ++_accountCheckGeneration;
-    try {
-      final available = await ref.read(apiServiceProvider).checkAccount(value);
-      if (!mounted || generation != _accountCheckGeneration) {
-        return;
-      }
-      setState(() => _accountAvailable = available);
-    } catch (_) {
-      if (!mounted || generation != _accountCheckGeneration) {
-        return;
-      }
-      setState(() => _accountAvailable = null);
-    }
-  }
 
   Future<void> _submit() async {
     if (_registering) {
@@ -166,10 +118,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     try {
       await ref
           .read(authProvider)
-          .register(
-            displayName: _nameController.text.trim(),
-            account: _accountController.text.trim(),
-          );
+          .register(displayName: _nameController.text.trim());
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _remoteError = error.message);

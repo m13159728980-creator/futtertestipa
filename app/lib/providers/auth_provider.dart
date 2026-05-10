@@ -52,18 +52,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> register({
-    required String displayName,
-    required String account,
-  }) async {
+  Future<void> register({required String displayName}) async {
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final registeredUser = await _apiService.register(
-        displayName: displayName,
-        account: account,
-      );
+      final registeredUser = await _apiService.register(displayName: displayName);
       await _storageService.saveSession(registeredUser);
       await _storageService.ensureMasterKey();
       _user = registeredUser;

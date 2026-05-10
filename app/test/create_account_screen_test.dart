@@ -10,62 +10,22 @@ void main() {
   testWidgets('blank name disables submit button', (tester) async {
     await tester.pumpWidget(_testApp());
 
-    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
-    await tester.pump();
-
     expect(_submitButton(tester).onPressed, isNull);
   });
 
-  testWidgets('blank name shows exactly 请输入名字', (tester) async {
+  testWidgets('create account screen has no username field', (tester) async {
     await tester.pumpWidget(_testApp());
 
-    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
-    await tester.pump();
-
-    expect(find.text('请输入名字'), findsOneWidget);
+    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '名字'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '账号'), findsNothing);
+    expect(find.widgetWithText(TextFormField, '用户名'), findsNothing);
   });
 
-  testWidgets('invalid account disables submit button', (tester) async {
-    await tester.pumpWidget(_testApp());
-
-    await tester.enterText(find.byType(TextFormField).at(0), 'Xiao Ming');
-    await tester.enterText(find.byType(TextFormField).at(1), 'xiaoming');
-    await tester.pump();
-
-    expect(_submitButton(tester).onPressed, isNull);
-  });
-
-  testWidgets('occupied account disables submit button', (tester) async {
-    await tester.pumpWidget(_testApp(accountAvailable: false));
-
-    await tester.enterText(find.byType(TextFormField).at(0), 'Xiao Ming');
-    await tester.enterText(find.byType(TextFormField).at(1), '@XiaoMing');
-    await tester.pumpAndSettle();
-
-    expect(_submitButton(tester).onPressed, isNull);
-  });
-
-  testWidgets('invalid account shows exactly 账号必须是英文，且以@开头', (tester) async {
+  testWidgets('valid name enables start button', (tester) async {
     await tester.pumpWidget(_testApp());
 
     await tester.enterText(find.widgetWithText(TextFormField, '名字'), '小明');
-    await tester.enterText(
-      find.widgetWithText(TextFormField, '账号'),
-      'xiaoming',
-    );
-    await tester.pump();
-
-    expect(find.text('账号必须是英文，且以@开头'), findsOneWidget);
-  });
-
-  testWidgets('valid form enables 开始聊天 button', (tester) async {
-    await tester.pumpWidget(_testApp());
-
-    await tester.enterText(find.widgetWithText(TextFormField, '名字'), '小明');
-    await tester.enterText(
-      find.widgetWithText(TextFormField, '账号'),
-      '@XiaoMing',
-    );
     await tester.pump();
 
     final button = tester.widget<ElevatedButton>(
@@ -79,8 +39,8 @@ ElevatedButton _submitButton(WidgetTester tester) {
   return tester.widget<ElevatedButton>(find.byType(ElevatedButton));
 }
 
-Widget _testApp({bool accountAvailable = true}) {
-  final api = _FakeApiService(accountAvailable: accountAvailable);
+Widget _testApp() {
+  final api = _FakeApiService();
   final storage = InMemorySecureStorage();
 
   return ProviderScope(
@@ -93,19 +53,12 @@ Widget _testApp({bool accountAvailable = true}) {
 }
 
 class _FakeApiService implements ApiService {
-  _FakeApiService({required this.accountAvailable});
-
-  final bool accountAvailable;
-
   @override
-  Future<User> register({
-    required String displayName,
-    required String account,
-  }) async {
+  Future<User> register({required String displayName}) async {
     return User(
-      id: 'user-1',
+      id: '1',
       displayName: displayName,
-      account: account,
+      account: '1000000001',
       token: 'token-1',
     );
   }
@@ -113,15 +66,15 @@ class _FakeApiService implements ApiService {
   @override
   Future<User> validate(String token) async {
     return const User(
-      id: 'user-1',
+      id: '1',
       displayName: '小明',
-      account: '@XiaoMing',
+      account: '1000000001',
       token: 'token-1',
     );
   }
 
   @override
-  Future<bool> checkAccount(String account) async => accountAvailable;
+  Future<bool> checkAccount(String account) async => true;
 
   @override
   Future<void> deleteAccount({

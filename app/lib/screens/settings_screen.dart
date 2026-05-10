@@ -162,7 +162,7 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               ListTile(
                 title: Text(auth.user?.displayName ?? '未登录'),
-                subtitle: Text(auth.user?.account ?? 'UID: -'),
+                subtitle: Text(auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}'),
                 leading: DefaultAvatar(index: settings.avatarIndex),
               ),
               ListTile(
@@ -275,13 +275,13 @@ class SettingsScreen extends ConsumerWidget {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('请输入账号 $account 确认注销。'),
+                  Text('请输入ID $account 确认注销。'),
                   const SizedBox(height: 12),
                   TextField(
                     key: const ValueKey('delete-account-confirmation'),
                     controller: controller,
                     decoration: InputDecoration(
-                      labelText: '账号',
+                      labelText: 'ID',
                       errorText: errorText.isEmpty ? null : errorText,
                     ),
                   ),
@@ -296,7 +296,7 @@ class SettingsScreen extends ConsumerWidget {
                   onPressed: () async {
                     final confirmation = controller.text.trim();
                     if (confirmation != account) {
-                      setState(() => errorText = '账号不匹配');
+                      setState(() => errorText = 'ID不匹配');
                       return;
                     }
                     final database = await ref.read(localDatabaseServiceProvider);

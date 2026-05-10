@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 const db = require('../../database/db');
 
-const CONTACT_NOT_FOUND_MESSAGE = 'Contact account not found';
+const CONTACT_NOT_FOUND_MESSAGE = 'User ID not found';
 const CONTACT_SELF_MESSAGE = 'Cannot add yourself as a contact';
+const CONTACT_ID_MESSAGE = 'User ID must be 10 digits';
 const GROUP_MIN_MEMBERS_MESSAGE = 'Group requires at least 2 selected members';
 const GROUP_NOT_FOUND_MESSAGE = 'Group not found';
 const GROUP_MEMBER_NOT_FOUND_MESSAGE = 'Group member not found';
@@ -81,6 +82,14 @@ function generateGroupCode() {
 
 function isUniqueViolation(error) {
   return error && error.code === '23505';
+}
+
+function normalizeContactId(value) {
+  const id = String(value || '').trim();
+  if (!/^\d{10}$/.test(id)) {
+    throw new GroupServiceError(CONTACT_ID_MESSAGE, 400);
+  }
+  return id;
 }
 
 function createMemoryGroupRepository(userRepository) {
@@ -426,7 +435,8 @@ function createGroupService(options = {}) {
   const groupCodeGenerator = options.groupCodeGenerator || generateGroupCode;
 
   async function addContact(userId, account) {
-    const contact = await repository.findActiveUserByAccount(account);
+    const publicId = normalizeContactId(account);
+    const contact = await repository.findActiveUserByAccount(publicId);
     if (!contact) {
       throw new GroupServiceError(CONTACT_NOT_FOUND_MESSAGE, 404);
     }
@@ -564,6 +574,7 @@ function createGroupService(options = {}) {
 }
 
 module.exports = {
+  CONTACT_ID_MESSAGE,
   CONTACT_NOT_FOUND_MESSAGE,
   CONTACT_SELF_MESSAGE,
   GROUP_ADMIN_REMOVE_FORBIDDEN_MESSAGE,

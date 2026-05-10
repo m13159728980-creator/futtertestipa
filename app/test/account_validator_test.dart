@@ -3,16 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AccountValidator', () {
-    test('accepts valid @ZCMX', () {
-      expect(AccountValidator.validateAccount('@ZCMX'), isNull);
+    test('accepts valid 10 digit user ID', () {
+      expect(AccountValidator.validateUserId('1000000001'), isNull);
     });
 
-    test('rejects missing @ prefix with exact Chinese message', () {
-      expect(AccountValidator.validateAccount('ZCMX'), '账号必须是英文，且以@开头');
-    });
-
-    test('rejects account with digits with same message', () {
-      expect(AccountValidator.validateAccount('@ZCMX1'), '账号必须是英文，且以@开头');
+    test('rejects non 10 digit user ID', () {
+      expect(AccountValidator.validateUserId('@ZCMX'), '请输入10位数字ID');
+      expect(AccountValidator.validateUserId('123'), '请输入10位数字ID');
     });
 
     test('rejects blank display name with exact Chinese message', () {

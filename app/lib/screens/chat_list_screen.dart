@@ -20,17 +20,17 @@ class ChatListScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
             ),
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         children: [
           Row(
             children: [
-              DefaultAvatar(index: user?.avatarIndex ?? 0, radius: 28),
-              const SizedBox(width: 16),
+              DefaultAvatar(index: user?.avatarIndex ?? 0, radius: 24),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,14 +39,17 @@ class ChatListScreen extends ConsumerWidget {
                       user?.displayName ?? '',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(height: 4),
-                    Text(user?.account ?? ''),
+                    const SizedBox(height: 2),
+                    Text(
+                      user == null ? '' : 'ID: ${user.account}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           Text('暂无聊天', style: Theme.of(context).textTheme.titleMedium),
         ],
       ),

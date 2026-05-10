@@ -106,10 +106,7 @@ class _OfflineApiService implements ApiService {
   }) async {}
 
   @override
-  Future<User> register({
-    required String displayName,
-    required String account,
-  }) {
+  Future<User> register({required String displayName}) {
     throw UnimplementedError();
   }
 
@@ -124,7 +121,7 @@ class _OfflineApiService implements ApiService {
 }
 
 User _user({String token = 'token-1'}) {
-  return User(id: 'me', displayName: 'Me', account: '@Me', token: token);
+  return User(id: 'me', displayName: 'Me', account: '1000000001', token: token);
 }
 
 class _FakeWebSocketChannel implements WebSocketChannel {

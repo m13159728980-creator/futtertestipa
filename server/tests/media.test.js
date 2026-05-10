@@ -66,10 +66,10 @@ function createMemoryMediaRepository() {
   };
 }
 
-async function register(app, account = '@MEDIA') {
+async function register(app, displayName = 'MEDIA') {
   const res = await request(app)
     .post('/api/auth/register')
-    .send({ account, displayName: account.slice(1) });
+    .send({ displayName });
   expect(res.status).toBe(201);
   return res.body;
 }
@@ -193,12 +193,12 @@ test('account deletion marks deletion, increments token version, records purge, 
   const repository = createMemoryUserRepository();
   const userService = createUserService({ userRepository: repository });
   const app = createApp({ userService, userRepository: repository });
-  const { token, user } = await register(app, '@DELETE');
+  const { token, user } = await register(app, 'DELETE');
 
   const deleteRes = await request(app)
     .delete('/api/users/me')
     .set('Authorization', `Bearer ${token}`)
-    .send({ account: '@DELETE' });
+    .send({ account: user.account });
   expect(deleteRes.status).toBe(204);
 
   const deleted = repository.users.find((candidate) => candidate.id === user.id);
@@ -209,11 +209,11 @@ test('account deletion marks deletion, increments token version, records purge, 
   ]);
   await expect(userService.validateTokenPayload({
     userId: user.id,
-    account: '@DELETE',
+    account: user.account,
     tokenVersion: 0
   })).resolves.toBeNull();
 
-  const checkRes = await request(app).get('/api/users/check-account').query({ account: '@DELETE' });
+  const checkRes = await request(app).get('/api/users/check-account').query({ account: user.account });
   expect(checkRes.status).toBe(200);
   expect(checkRes.body).toEqual({ available: true });
 });

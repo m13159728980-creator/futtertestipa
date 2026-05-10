@@ -1,10 +1,11 @@
 const db = require('../../database/db');
+const crypto = require('crypto');
 
-const ACCOUNT_PATTERN = /^@[A-Za-z]{1,9}$/;
-const ACCOUNT_MESSAGE = '\u8d26\u53f7\u5fc5\u987b\u662f\u82f1\u6587\uff0c\u4e14\u4ee5@\u5f00\u5934';
+const ACCOUNT_PATTERN = /^\d{10}$/;
+const ACCOUNT_MESSAGE = '\u8bf7\u8f93\u516510\u4f4d\u6570\u5b57ID';
 const NAME_MESSAGE = '\u8bf7\u8f93\u5165\u540d\u5b57';
-const DUPLICATE_ACCOUNT_MESSAGE = '\u8d26\u53f7\u5df2\u88ab\u6ce8\u518c';
-const DELETE_CONFIRMATION_MESSAGE = '\u8bf7\u8f93\u5165\u6b63\u786e\u8d26\u53f7\u786e\u8ba4\u6ce8\u9500';
+const DUPLICATE_ACCOUNT_MESSAGE = 'ID\u5df2\u88ab\u5360\u7528';
+const DELETE_CONFIRMATION_MESSAGE = '\u8bf7\u8f93\u5165\u6b63\u786eID\u786e\u8ba4\u6ce8\u9500';
 const AVATAR_MESSAGE = '\u5934\u50cf\u7f16\u53f7\u5fc5\u987b\u57280\u52308\u4e4b\u95f4';
 const USER_NOT_FOUND_MESSAGE = '\u7528\u6237\u4e0d\u5b58\u5728';
 
@@ -52,6 +53,10 @@ function validateAccount(account) {
   if (!ACCOUNT_PATTERN.test(String(account || ''))) {
     throw new UserServiceError(ACCOUNT_MESSAGE, 400);
   }
+}
+
+function generatePublicId() {
+  return String(crypto.randomInt(1000000000, 10000000000));
 }
 
 function isDuplicateError(error) {
@@ -160,6 +165,7 @@ function createPostgresUserRepository(query = db.query) {
 
 function createUserService(options = {}) {
   const repository = options.repository || options.userRepository || createPostgresUserRepository(options.query);
+  const publicIdGenerator = options.publicIdGenerator || generatePublicId;
 
   async function isAccountAvailable(account) {
     validateAccount(account);
@@ -169,24 +175,29 @@ function createUserService(options = {}) {
     return !existing;
   }
 
-  async function register({ account, displayName, name }) {
-    validateAccount(account);
+  async function register({ displayName, name }) {
     const normalizedDisplayName = normalizeDisplayName(displayName ?? name);
-    const existing = await repository.findByAccount(account);
 
-    if (existing) {
-      throw new UserServiceError(DUPLICATE_ACCOUNT_MESSAGE, 409);
-    }
-
-    try {
-      const avatarIndex = Math.floor(Math.random() * 9);
-      return mapUser(await repository.create({ account, displayName: normalizedDisplayName, avatarIndex }));
-    } catch (error) {
-      if (isDuplicateError(error)) {
-        throw new UserServiceError(DUPLICATE_ACCOUNT_MESSAGE, 409);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const account = publicIdGenerator();
+      validateAccount(account);
+      const existing = await repository.findByAccount(account);
+      if (existing) {
+        continue;
       }
-      throw error;
+
+      try {
+        const avatarIndex = Math.floor(Math.random() * 9);
+        return mapUser(await repository.create({ account, displayName: normalizedDisplayName, avatarIndex }));
+      } catch (error) {
+        if (isDuplicateError(error)) {
+          continue;
+        }
+        throw error;
+      }
     }
+
+    throw new UserServiceError(DUPLICATE_ACCOUNT_MESSAGE, 409);
   }
 
   async function validateTokenPayload(payload) {

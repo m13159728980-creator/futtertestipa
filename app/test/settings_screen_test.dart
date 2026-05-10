@@ -130,16 +130,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(api.deleteAccountCalls, isEmpty);
-    expect(find.text('账号不匹配'), findsOneWidget);
+    expect(find.text('ID不匹配'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('delete-account-confirmation')),
-      '@XiaoMing',
+      '1000000001',
     );
     await tester.tap(find.widgetWithText(FilledButton, '确认注销'));
     await tester.pumpAndSettle();
 
-    expect(api.deleteAccountCalls, ['@XiaoMing']);
+    expect(api.deleteAccountCalls, ['1000000001']);
     expect(auth.status, AuthStatus.unauthenticated);
     expect(await storage.readToken(), isNull);
     expect(cacheService.clearCacheCalls, 1);
@@ -198,7 +198,7 @@ Message _message({required String id}) {
 const _testUser = User(
   id: 'user-1',
   displayName: 'Xiao Ming',
-  account: '@XiaoMing',
+  account: '1000000001',
   token: 'token-1',
 );
 
@@ -243,10 +243,7 @@ class _FakeApiService implements ApiService {
   }
 
   @override
-  Future<User> register({
-    required String displayName,
-    required String account,
-  }) async => _testUser;
+  Future<User> register({required String displayName}) async => _testUser;
 
   @override
   Future<User> validate(String token) async => _testUser;

@@ -19,7 +19,7 @@ function createContactRoutes({ authMiddleware, groupService }) {
   router.post('/api/contacts', authMiddleware, async (req, res, next) => {
     try {
       const before = await groupService.listContacts(req.user.id);
-      const contact = await groupService.addContact(req.user.id, req.body?.account);
+      const contact = await groupService.addContact(req.user.id, req.body?.id ?? req.body?.account);
       const existed = before.some((candidate) => candidate.id === contact.id);
       res.status(existed ? 200 : 201).json({ contact });
     } catch (error) {

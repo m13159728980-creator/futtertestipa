@@ -10,7 +10,7 @@ final apiServiceProvider = Provider<ApiService>((ref) {
 });
 
 abstract interface class ApiService {
-  Future<User> register({required String displayName, required String account});
+  Future<User> register({required String displayName});
 
   Future<User> validate(String token);
 
@@ -42,14 +42,11 @@ class HttpApiService implements ApiService {
   final String _baseUrl;
 
   @override
-  Future<User> register({
-    required String displayName,
-    required String account,
-  }) async {
+  Future<User> register({required String displayName}) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/auth/register'),
       headers: _jsonHeaders(),
-      body: jsonEncode({'displayName': displayName, 'account': account}),
+      body: jsonEncode({'displayName': displayName}),
     );
     final body = _decode(response);
     if (response.statusCode != 201) {

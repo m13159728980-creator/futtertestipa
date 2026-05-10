@@ -1,16 +1,16 @@
 class AccountValidator {
-  static final RegExp _accountRegex = RegExp(r'^@[A-Za-z]{1,9}$');
+  static final RegExp _userIdRegex = RegExp(r'^\d{10}$');
 
-  static const String accountMessage = '账号必须是英文，且以@开头';
+  static const String accountMessage = '请输入10位数字ID';
   static const String displayNameRequiredMessage = '请输入名字';
   static const String displayNameMaxLengthMessage = '名字不能超过24个字符';
 
   static String? validateAccount(String account) {
-    if (!_accountRegex.hasMatch(account)) {
-      return accountMessage;
-    }
+    return validateUserId(account);
+  }
 
-    return null;
+  static String? validateUserId(String id) {
+    return _userIdRegex.hasMatch(id) ? null : accountMessage;
   }
 
   static String? validateDisplayName(String displayName) {

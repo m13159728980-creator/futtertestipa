@@ -143,6 +143,6 @@ if (!process.env.TEST_DATABASE_URL) {
     );
 
     expect(rows.some((row) => row.contype === 'u' && row.definition.includes('UNIQUE (account)'))).toBe(true);
-    expect(rows.some((row) => row.contype === 'c' && row.definition.includes('^@[A-Za-z]{1,9}$'))).toBe(true);
+    expect(rows.some((row) => row.contype === 'c' && row.definition.includes('^[0-9]{10}$'))).toBe(true);
   });
 }

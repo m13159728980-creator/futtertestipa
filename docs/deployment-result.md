@@ -11,60 +11,45 @@
 
 ## 已执行
 
-本机安装 PuTTY 工具链后，使用 `plink/pscp` 以非交互方式完成部署：
+已使用 PuTTY `plink/pscp` 完成非交互部署，并在远端执行：
 
-```powershell
-winget install --id PuTTY.PuTTY -e --accept-package-agreements --accept-source-agreements
+```bash
+cd /home/eapp/chat_server_upload
+sudo env APP_USER=eapp APP_DIR=/home/eapp/chat_server SERVICE_NAME=chat-server REPO_DIR=/home/eapp/chat_server_upload bash ./deploy.sh
 ```
 
-远端主机密钥：
+本次部署应用了新迁移：
 
 ```text
-ssh-ed25519 255 SHA256:7jTUgblTmQBg0cH1JPcpKjIJBTte/vpK2pyfmctUVIs
+002_numeric_user_ids.sql
 ```
 
-部署过程：
+迁移效果：
 
-- 创建并授权 `/home/eapp/chat_server`。
-- 上传服务端代码到临时目录 `/home/eapp/chat_server_upload`。
-- 以 sudo 执行 `deploy.sh`。
-- 安装 Node.js/npm/PostgreSQL/ufw/rsync 等依赖。
-- 创建 PostgreSQL 数据库 `private_chat` 和用户 `chat_user`。
-- 执行 migration：`001_initial.sql`。
-- 创建并启动 systemd 服务：`chat-server.service`。
-- 开放防火墙端口：TCP `3000`、TCP `3001`、UDP `5000-6000`。
+- 移除旧的 `@英文用户名` 数据库约束。
+- 将已有用户账号转换为 10 位数字 ID。
+- 增加新的 `^[0-9]{10}$` 约束。
+- 重启 `chat-server` 服务。
 
 ## 验证结果
 
-远端本机：
-
-```bash
-curl -fsS http://127.0.0.1:3000/api/health
-systemctl is-active chat-server
-ss -lntu | grep -E ':(3000|3001)\b'
-```
-
-结果：
-
-```text
-{"ok":true}
-active
-*:3000 LISTEN
-*:3001 LISTEN
-```
-
-本机访问：
+健康检查：
 
 ```powershell
-Invoke-WebRequest -UseBasicParsing http://192.168.1.103:3000/api/health
 Invoke-WebRequest -UseBasicParsing http://wdsj.fun:3000/api/health
 ```
 
 结果：
 
-- `http://192.168.1.103:3000/api/health` 返回 `200 {"ok":true}`
-- `http://wdsj.fun:3000/api/health` 返回 `200 {"ok":true}`
-- `wdsj.fun` 当前解析到 `122.138.97.22`
+```text
+200 {"ok":true}
+```
+
+注册和加好友验证：
+
+- `POST http://wdsj.fun:3000/api/auth/register` 只传 `displayName` 可以成功注册。
+- 返回用户 ID 为 10 位数字，例如 `1699690584`。
+- `POST http://wdsj.fun:3000/api/contacts` 使用 `{ "id": "10位数字ID" }` 可以成功添加好友。
 
 ## 运行信息
 
