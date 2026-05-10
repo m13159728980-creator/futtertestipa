@@ -39,6 +39,17 @@ extract_database_url_password() {
   fi
 }
 
+upsert_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local value="$3"
+  if grep -qE "^${key}=" "$env_file"; then
+    sed -i "s#^${key}=.*#${key}=${value}#" "$env_file"
+  else
+    echo "${key}=${value}" >>"$env_file"
+  fi
+}
+
 if ! command -v apt-get >/dev/null 2>&1; then
   echo "This deployment script expects an Ubuntu/Debian host with apt-get." >&2
   exit 1
@@ -76,6 +87,9 @@ else
 fi
 
 validate_db_password "$DB_PASSWORD"
+upsert_env_value "$APP_DIR/.env" API_PORT "${API_PORT:-8080}"
+upsert_env_value "$APP_DIR/.env" WS_PORT "${WS_PORT:-9081}"
+chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
 
 db_user_literal="$(sql_literal "$DB_USER")"
 db_name_literal="$(sql_literal "$DB_NAME")"
@@ -117,13 +131,13 @@ systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 
-ufw allow 3000/tcp
-ufw allow 3001/tcp
+ufw allow 8080/tcp
+ufw allow 9081/tcp
 ufw allow 5000:6000/udp
 ufw --force enable
 
 for attempt in 1 2 3 4 5; do
-  if curl -fsS "http://127.0.0.1:${API_PORT:-3000}/api/health" >/dev/null; then
+  if curl -fsS "http://127.0.0.1:${API_PORT:-8080}/api/health" >/dev/null; then
     echo "Deployment healthy."
     exit 0
   fi

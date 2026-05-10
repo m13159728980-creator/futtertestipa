@@ -19,11 +19,11 @@ test('deploy.sh is an idempotent Ubuntu/Debian deployment script for the chat se
   expect(script).toContain('npm install');
   expect(script).toContain('npm run migrate');
   expect(script).toContain('systemctl');
-  expect(script).toContain('ufw allow 3000/tcp');
-  expect(script).toContain('ufw allow 3001/tcp');
+  expect(script).toContain('ufw allow 8080/tcp');
+  expect(script).toContain('ufw allow 9081/tcp');
   expect(script).toContain('ufw allow 5000:6000/udp');
   expect(script).toContain('curl');
-  expect(script).toContain('http://127.0.0.1:${API_PORT:-3000}/api/health');
+  expect(script).toContain('http://127.0.0.1:${API_PORT:-8080}/api/health');
   expect(script).not.toMatch(/rm\s+-rf\s+\$?APP_DIR/);
   expect(script).not.toContain('git reset --hard');
 });
@@ -84,6 +84,8 @@ test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', 
   expect(script).toContain('existing_db_password="$(extract_database_url_password "$APP_DIR/.env")"');
   expect(script).toContain('if [ -z "${CHAT_DB_PASSWORD:-}" ] && [ -n "$existing_db_password" ]; then');
   expect(script).toContain('DB_PASSWORD="$existing_db_password"');
+  expect(script).toContain('upsert_env_value "$APP_DIR/.env" API_PORT "${API_PORT:-8080}"');
+  expect(script).toContain('upsert_env_value "$APP_DIR/.env" WS_PORT "${WS_PORT:-9081}"');
 });
 
 test('deploy.sh validates database passwords are URL-safe before writing or reusing DATABASE_URL', () => {
@@ -100,8 +102,8 @@ test('.env.example documents required deployment defaults', () => {
   const envPath = path.join(__dirname, '..', '.env.example');
   const env = fs.readFileSync(envPath, 'utf8');
 
-  expect(env).toContain('API_PORT=3000');
-  expect(env).toContain('WS_PORT=3001');
+  expect(env).toContain('API_PORT=8080');
+  expect(env).toContain('WS_PORT=9081');
   expect(env).toContain('DATABASE_URL=');
   expect(env).toContain('JWT_SECRET=');
   expect(env).toContain('STORAGE_PATH=');
