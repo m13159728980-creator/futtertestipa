@@ -127,3 +127,109 @@ test('websocket routes read events through approved contract', async () => {
   ]));
   expect(alice.sent.find((event) => event.type === 'message.read').payload.targets).toBeUndefined();
 });
+
+test('websocket broadcasts private burn setting changes to both participants', async () => {
+  const repository = createMemoryMessageRepository();
+  const messageService = createMessageService({ messageRepository: repository });
+  const socketServer = createSocketServer({
+    messageService,
+    authenticateToken: async (token) => {
+      if (token === 'alice-token') {
+        return { id: 1 };
+      }
+      if (token === 'bob-token') {
+        return { id: 2 };
+      }
+      return null;
+    }
+  });
+  const alice = createFakeSocket();
+  const bob = createFakeSocket();
+
+  socketServer.handleConnection(alice);
+  socketServer.handleConnection(bob);
+  await alice.emitMessage({ type: 'auth', token: 'alice-token' });
+  await bob.emitMessage({ type: 'auth', token: 'bob-token' });
+  await bob.emitMessage({
+    type: 'conversation.burn.set',
+    payload: { peerId: 1, burnAfter: 10 }
+  });
+
+  expect(alice.sent).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      type: 'conversation.burn.updated',
+      payload: {
+        setting: {
+          toType: 'user',
+          peerIds: [1, 2],
+          burnAfter: 10,
+          enabled: true
+        }
+      }
+    })
+  ]));
+  expect(bob.sent).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      type: 'conversation.burn.updated',
+      payload: expect.objectContaining({
+        setting: expect.objectContaining({ peerIds: [1, 2], burnAfter: 10 })
+      })
+    })
+  ]));
+});
+
+test('websocket broadcasts current user avatar changes to supplied targets', async () => {
+  const repository = createMemoryMessageRepository();
+  const messageService = createMessageService({ messageRepository: repository });
+  const userService = {
+    async updateAvatar(userId, avatarIndex) {
+      return { id: Number(userId), account: '1000000001', displayName: 'Alice', avatarIndex };
+    },
+    serializeUser(user) {
+      return {
+        id: user.id,
+        account: user.account,
+        displayName: user.displayName,
+        avatarIndex: user.avatarIndex
+      };
+    }
+  };
+  const socketServer = createSocketServer({
+    messageService,
+    userService,
+    authenticateToken: async (token) => {
+      if (token === 'alice-token') {
+        return { id: 1 };
+      }
+      if (token === 'bob-token') {
+        return { id: 2 };
+      }
+      return null;
+    }
+  });
+  const alice = createFakeSocket();
+  const bob = createFakeSocket();
+
+  socketServer.handleConnection(alice);
+  socketServer.handleConnection(bob);
+  await alice.emitMessage({ type: 'auth', token: 'alice-token' });
+  await bob.emitMessage({ type: 'auth', token: 'bob-token' });
+  await alice.emitMessage({
+    type: 'user.avatar.set',
+    payload: { avatarIndex: 4, targetIds: [2] }
+  });
+
+  expect(bob.sent).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      type: 'user.updated',
+      payload: {
+        user: {
+          id: 1,
+          account: '1000000001',
+          displayName: 'Alice',
+          avatarIndex: 4
+        }
+      }
+    })
+  ]));
+});

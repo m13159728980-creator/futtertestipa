@@ -111,26 +111,22 @@ class _VoiceTile extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.play_arrow, color: color),
-        const SizedBox(width: 8),
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: color,
+          child: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: List.generate(
-                  14,
-                  (index) => Expanded(
-                    child: Container(
-                      height: (index.isEven ? 18 : 28).toDouble(),
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
+              SizedBox(
+                height: 28,
+                child: CustomPaint(
+                  painter: _VoiceWavePainter(color: color),
+                  child: const SizedBox.expand(),
                 ),
               ),
               const SizedBox(height: 4),
@@ -143,6 +139,57 @@ class _VoiceTile extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _VoiceWavePainter extends CustomPainter {
+  const _VoiceWavePainter({required this.color});
+
+  final Color color;
+
+  static const _bars = [
+    8,
+    14,
+    20,
+    12,
+    24,
+    18,
+    10,
+    26,
+    16,
+    22,
+    12,
+    18,
+    9,
+    24,
+    15,
+    20,
+    11,
+    16,
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.45)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+    final gap = size.width / (_bars.length - 1);
+    for (var index = 0; index < _bars.length; index += 1) {
+      final height = _bars[index].toDouble().clamp(6, size.height);
+      final x = index * gap;
+      final centerY = size.height / 2;
+      canvas.drawLine(
+        Offset(x, centerY - height / 2),
+        Offset(x, centerY + height / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWavePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 

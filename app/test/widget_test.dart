@@ -57,7 +57,7 @@ void main() {
         'payload': {'token': 'token-1'},
       },
     ]);
-    expect(find.text('聊天'), findsOneWidget);
+    expect(find.text('Telegram'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 
@@ -205,7 +205,19 @@ class _OfflineApiService implements ApiService {
   }
 
   @override
+  Future<User> updateAvatar({required String token, required int avatarIndex}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<Message>> syncMessages({required String token}) async => const [];
+
+  @override
+  Future<void> registerPushToken({
+    required String token,
+    required String pushToken,
+    String platform = 'android',
+  }) async {}
 }
 
 User _user({String token = 'token-1'}) {

@@ -133,5 +133,17 @@ class _FakeApiService implements ApiService {
   }
 
   @override
+  Future<User> updateAvatar({required String token, required int avatarIndex}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<Message>> syncMessages({required String token}) async => const [];
+
+  @override
+  Future<void> registerPushToken({
+    required String token,
+    required String pushToken,
+    String platform = 'android',
+  }) async {}
 }

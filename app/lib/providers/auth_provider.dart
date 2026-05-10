@@ -57,7 +57,9 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final registeredUser = await _apiService.register(displayName: displayName);
+      final registeredUser = await _apiService.register(
+        displayName: displayName,
+      );
       await _storageService.saveSession(registeredUser);
       await _storageService.ensureMasterKey();
       _user = registeredUser;
@@ -103,6 +105,28 @@ class AuthProvider extends ChangeNotifier {
       final updated = await _apiService.updateProfile(
         token: currentUser.token,
         displayName: displayName,
+      );
+      _user = updated.copyWith(token: currentUser.token);
+      await _storageService.saveSession(_user!);
+      notifyListeners();
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updateAvatar(int avatarIndex) async {
+    final currentUser = _user;
+    if (currentUser == null) {
+      return;
+    }
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _apiService.updateAvatar(
+        token: currentUser.token,
+        avatarIndex: avatarIndex,
       );
       _user = updated.copyWith(token: currentUser.token);
       await _storageService.saveSession(_user!);

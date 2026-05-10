@@ -154,6 +154,31 @@ void main() {
       expect(user.token, 'token-1');
     });
 
+    test('updates current user avatar index', () async {
+      late http.Request captured;
+      final service = HttpApiService(
+        baseUrl: 'https://example.test/api',
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            '{"user":{"id":1,"account":"1000000001","displayName":"Me","avatarIndex":5}}',
+            200,
+          );
+        }),
+      );
+
+      final user = await service.updateAvatar(token: 'token-1', avatarIndex: 5);
+
+      expect(captured.method, 'PATCH');
+      expect(
+        captured.url.toString(),
+        'https://example.test/api/users/me/avatar',
+      );
+      expect(captured.body, '{"avatarIndex":5}');
+      expect(user.avatarIndex, 5);
+      expect(user.token, 'token-1');
+    });
+
     test('syncs messages and maps backend payloads', () async {
       final service = HttpApiService(
         baseUrl: 'https://example.test/api',
@@ -175,6 +200,31 @@ void main() {
 
       expect(messages.single.id, '11111111-1111-4111-8111-111111111111');
       expect(messages.single.content, 'hello');
+    });
+
+    test('registers a push token for Android notifications', () async {
+      late http.Request captured;
+      final service = HttpApiService(
+        baseUrl: 'https://example.test/api',
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response('', 204);
+        }),
+      );
+
+      await service.registerPushToken(
+        token: 'token-1',
+        pushToken: 'fcm-token-1',
+        platform: 'android',
+      );
+
+      expect(captured.method, 'POST');
+      expect(
+        captured.url.toString(),
+        'https://example.test/api/users/me/push-token',
+      );
+      expect(captured.headers['Authorization'], 'Bearer token-1');
+      expect(captured.body, '{"token":"fcm-token-1","platform":"android"}');
     });
   });
 }

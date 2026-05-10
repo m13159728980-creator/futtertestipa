@@ -112,6 +112,43 @@ test('persists client supplied message id so websocket echo replaces local draft
   await expect(repository.findMessageById('11111111-1111-4111-8111-111111111111')).resolves.toEqual(result.message);
 });
 
+test('private burn setting is shared by both participants and applied to new messages', async () => {
+  const { service } = createService();
+
+  const enabled = await service.setPrivateBurnSetting(1, 2, 30);
+  expect(enabled).toEqual({
+    setting: {
+      toType: 'user',
+      peerIds: [1, 2],
+      burnAfter: 30,
+      enabled: true
+    },
+    targets: [1, 2]
+  });
+
+  await expect(service.getPrivateBurnSetting(2, 1)).resolves.toEqual(enabled.setting);
+
+  const message = await service.createMessage(2, {
+    toId: 1,
+    toType: 'user',
+    type: 'text',
+    content: 'shared burn'
+  });
+  expect(message.message).toMatchObject({
+    fromId: 2,
+    toId: 1,
+    type: 'burn',
+    burnAfter: 30
+  });
+
+  const disabled = await service.setPrivateBurnSetting(2, 1, 0);
+  expect(disabled.setting).toMatchObject({
+    peerIds: [1, 2],
+    burnAfter: 0,
+    enabled: false
+  });
+});
+
 test('group message fan-out target list includes active members', async () => {
   const { repository, service } = createService();
   repository.setGroupMembers(10, [

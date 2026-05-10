@@ -84,6 +84,24 @@ function createSocketServer({ server, messageService, userService, authenticateT
     if (event.type === 'message.burn.start') {
       const result = await messageService.startBurn(event.messageId || event.payload?.messageId, userId);
       broadcast(result.targets, 'message.burn.start', clientPayload(result));
+      return;
+    }
+    if (event.type === 'conversation.burn.set') {
+      const result = await messageService.setPrivateBurnSetting(
+        userId,
+        event.payload?.peerId,
+        event.payload?.burnAfter
+      );
+      broadcast(result.targets, 'conversation.burn.updated', { setting: result.setting });
+      return;
+    }
+    if (event.type === 'user.avatar.set') {
+      const user = await userService.updateAvatar(userId, Number(event.payload?.avatarIndex));
+      const payload = { user: userService.serializeUser(user) };
+      const targets = Array.isArray(event.payload?.targetIds)
+        ? Array.from(new Set([userId, ...event.payload.targetIds.map(Number)]))
+        : [userId];
+      broadcast(targets, 'user.updated', payload);
     }
   }
 

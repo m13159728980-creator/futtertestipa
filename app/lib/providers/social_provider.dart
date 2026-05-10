@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/services/api_service.dart';
 import 'package:app/models/group.dart';
 import 'package:app/models/user.dart';
@@ -9,16 +12,23 @@ final socialProvider = ChangeNotifierProvider<SocialProvider>((ref) {
   return SocialProvider(
     apiService: ref.watch(apiServiceProvider),
     auth: ref.watch(authProvider),
+    webSocketService: ref.watch(webSocketServiceProvider),
   )..load();
 });
 
 class SocialProvider extends ChangeNotifier {
-  SocialProvider({required ApiService apiService, required AuthProvider auth})
-    : _apiService = apiService,
-      _auth = auth;
+  SocialProvider({
+    required ApiService apiService,
+    required AuthProvider auth,
+    required WebSocketService webSocketService,
+  }) : _apiService = apiService,
+       _auth = auth {
+    _socketSubscription = webSocketService.events.listen(_handleEvent);
+  }
 
   final ApiService _apiService;
   final AuthProvider _auth;
+  StreamSubscription<WebSocketEvent>? _socketSubscription;
 
   final List<User> _contacts = [];
   final List<Group> _groups = [];
@@ -121,6 +131,29 @@ class SocialProvider extends ChangeNotifier {
       _groups.add(group);
     }
     notifyListeners();
+  }
+
+  void _handleEvent(WebSocketEvent event) {
+    if (event.type != 'user.updated') {
+      return;
+    }
+    final source = event.payload['user'];
+    if (source is! Map) {
+      return;
+    }
+    final updated = User.fromJson(Map<String, dynamic>.from(source));
+    final index = _contacts.indexWhere((contact) => contact.id == updated.id);
+    if (index == -1) {
+      return;
+    }
+    _contacts[index] = updated;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _socketSubscription?.cancel();
+    super.dispose();
   }
 
   String _requireToken() {

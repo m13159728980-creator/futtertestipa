@@ -52,7 +52,15 @@ abstract interface class ApiService {
     required String displayName,
   });
 
+  Future<User> updateAvatar({required String token, required int avatarIndex});
+
   Future<List<Message>> syncMessages({required String token});
+
+  Future<void> registerPushToken({
+    required String token,
+    required String pushToken,
+    String platform = 'android',
+  });
 }
 
 class ApiException implements Exception {
@@ -260,6 +268,23 @@ class HttpApiService implements ApiService {
   }
 
   @override
+  Future<User> updateAvatar({
+    required String token,
+    required int avatarIndex,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/users/me/avatar'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'avatarIndex': avatarIndex}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return User.fromJson(body['user'] as Map<String, dynamic>, token: token);
+  }
+
+  @override
   Future<List<Message>> syncMessages({required String token}) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/messages/sync'),
@@ -273,6 +298,23 @@ class HttpApiService implements ApiService {
       for (final item in (body['messages'] as List? ?? const []))
         if (item is Map<String, dynamic>) Message.fromJson(item),
     ];
+  }
+
+  @override
+  Future<void> registerPushToken({
+    required String token,
+    required String pushToken,
+    String platform = 'android',
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/users/me/push-token'),
+      headers: _jsonHeaders(token: token),
+      body: jsonEncode({'token': pushToken, 'platform': platform}),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 204) {
+      throw ApiException(_message(body));
+    }
   }
 
   Map<String, String> _jsonHeaders({String? token}) {

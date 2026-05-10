@@ -49,6 +49,7 @@ function createMemoryMessageRepository() {
   const reads = [];
   const groupMembers = new Map();
   const users = new Set();
+  const privateBurnSettings = new Map();
 
   function activeGroupMemberIds(groupId) {
     return (groupMembers.get(Number(groupId)) || [])
@@ -192,6 +193,22 @@ function createMemoryMessageRepository() {
         )
         .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
         .map(mapMessage);
+    },
+
+    async upsertPrivateBurnSetting(userAId, userBId, burnAfter, updatedAt) {
+      const peerIds = sortedPrivatePeerIds(userAId, userBId);
+      const row = {
+        userAId: peerIds[0],
+        userBId: peerIds[1],
+        burnAfter: Number(burnAfter),
+        updatedAt
+      };
+      privateBurnSettings.set(privateSettingKey(userAId, userBId), row);
+      return mapPrivateBurnSetting(row);
+    },
+
+    async getPrivateBurnSetting(userAId, userBId) {
+      return mapPrivateBurnSetting(privateBurnSettings.get(privateSettingKey(userAId, userBId)));
     }
   };
 }
@@ -380,7 +397,60 @@ function createPostgresMessageRepository(query = db.query) {
         [userId, since]
       );
       return rows.map(mapMessage);
+    },
+
+    async upsertPrivateBurnSetting(userAId, userBId, burnAfter, updatedAt) {
+      const [leftId, rightId] = sortedPrivatePeerIds(userAId, userBId);
+      const { rows } = await query(
+        `
+          INSERT INTO private_conversation_settings (user_a_id, user_b_id, burn_after, updated_at)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (user_a_id, user_b_id) DO UPDATE
+          SET burn_after = EXCLUDED.burn_after,
+              updated_at = EXCLUDED.updated_at
+          RETURNING user_a_id, user_b_id, burn_after, updated_at
+        `,
+        [leftId, rightId, burnAfter, updatedAt]
+      );
+      return mapPrivateBurnSetting(rows[0]);
+    },
+
+    async getPrivateBurnSetting(userAId, userBId) {
+      const [leftId, rightId] = sortedPrivatePeerIds(userAId, userBId);
+      const { rows } = await query(
+        `
+          SELECT user_a_id, user_b_id, burn_after, updated_at
+          FROM private_conversation_settings
+          WHERE user_a_id = $1
+            AND user_b_id = $2
+          LIMIT 1
+        `,
+        [leftId, rightId]
+      );
+      return mapPrivateBurnSetting(rows[0]);
     }
+  };
+}
+
+function sortedPrivatePeerIds(userAId, userBId) {
+  return [Number(userAId), Number(userBId)].sort((left, right) => left - right);
+}
+
+function privateSettingKey(userAId, userBId) {
+  return sortedPrivatePeerIds(userAId, userBId).join(':');
+}
+
+function mapPrivateBurnSetting(row) {
+  if (!row) {
+    return null;
+  }
+  const peerIds = sortedPrivatePeerIds(row.userAId ?? row.user_a_id, row.userBId ?? row.user_b_id);
+  const burnAfter = Number(row.burnAfter ?? row.burn_after ?? 0);
+  return {
+    toType: 'user',
+    peerIds,
+    burnAfter,
+    enabled: burnAfter > 0
   };
 }
 
@@ -472,7 +542,7 @@ function createMessageService(options = {}) {
     }
   }
 
-  async function createMessage(fromId, input) {
+async function createMessage(fromId, input) {
     const data = normalizeMessageInput(fromId, input, now);
     if (data.toType === 'group') {
       if (!(await repository.isActiveGroupMember(data.toId, data.fromId))) {
@@ -482,8 +552,44 @@ function createMessageService(options = {}) {
       throw new MessageServiceError('Message target not found', 404);
     }
 
+    if (data.toType === 'user' && data.burnAfter === 0) {
+      const setting = await repository.getPrivateBurnSetting?.(data.fromId, data.toId);
+      if (setting?.enabled) {
+        data.burnAfter = setting.burnAfter;
+        data.type = 'burn';
+      }
+    } else if (data.burnAfter > 0) {
+      data.type = 'burn';
+    }
+
     const message = await repository.createMessage(data);
     return { message, targets: await targetsFor(message) };
+  }
+
+  async function setPrivateBurnSetting(userId, peerId, burnAfter) {
+    const actorId = Number(userId);
+    const targetId = Number(peerId);
+    const seconds = Number(burnAfter ?? 0);
+    if (!Number.isInteger(actorId) || !Number.isInteger(targetId) || actorId === targetId) {
+      throw new MessageServiceError('Invalid conversation participants', 400);
+    }
+    if (!VALID_BURN_AFTER.has(seconds)) {
+      throw new MessageServiceError('Invalid burnAfter', 400);
+    }
+    if (repository.userExists && !(await repository.userExists(targetId))) {
+      throw new MessageServiceError('Message target not found', 404);
+    }
+    const setting = await repository.upsertPrivateBurnSetting(actorId, targetId, seconds, now());
+    return { setting, targets: setting.peerIds };
+  }
+
+  async function getPrivateBurnSetting(userId, peerId) {
+    return (await repository.getPrivateBurnSetting(Number(userId), Number(peerId))) || {
+      toType: 'user',
+      peerIds: sortedPrivatePeerIds(userId, peerId),
+      burnAfter: 0,
+      enabled: false
+    };
   }
 
   async function markDelivered(messageId, userId) {
@@ -551,9 +657,11 @@ function createMessageService(options = {}) {
   return {
     createMessage,
     expireBurnedMessages,
+    getPrivateBurnSetting,
     markDelivered,
     markRead,
     revokeMessage,
+    setPrivateBurnSetting,
     startBurn,
     syncMessages
   };

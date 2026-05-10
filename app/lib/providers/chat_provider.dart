@@ -165,6 +165,7 @@ class ChatProvider extends ChangeNotifier {
 
   final Map<String, List<Message>> _messagesByConversation = {};
   final Map<String, int> _unreadCounts = {};
+  final Map<String, Duration?> _burnAfterByConversation = {};
   bool _isLoading = false;
   Future<void>? _openDatabaseFuture;
 
@@ -189,6 +190,24 @@ class ChatProvider extends ChangeNotifier {
 
   int unreadCountFor(String peerId) {
     return _unreadCounts[_key(ConversationType.user, peerId)] ?? 0;
+  }
+
+  Duration? burnAfterFor(String peerId) {
+    return _burnAfterByConversation[_key(ConversationType.user, peerId)];
+  }
+
+  Future<void> setBurnAfter(String peerId, Duration? burnAfter) async {
+    final seconds = burnAfter?.inSeconds ?? 0;
+    _webSocketService.send(
+      WebSocketEvent(
+        type: 'conversation.burn.set',
+        payload: {'peerId': peerId, 'burnAfter': seconds},
+      ),
+    );
+    _setBurnSettingFromPeerIds(
+      peerIds: [_currentUserId, peerId],
+      burnAfterSeconds: seconds,
+    );
   }
 
   Future<void> loadMessages(String peerId) async {
@@ -222,6 +241,9 @@ class ChatProvider extends ChangeNotifier {
     }
     _messagesByConversation[_key(toType, peerId)] = _sorted(merged.values);
     _unreadCounts[_key(toType, peerId)] = 0;
+    await _sendReadReceipts(
+      _messagesByConversation[_key(toType, peerId)] ?? const [],
+    );
     _isLoading = false;
     notifyListeners();
   }
@@ -249,15 +271,17 @@ class ChatProvider extends ChangeNotifier {
     if (trimmed.isEmpty) {
       return;
     }
+    final effectiveBurnAfter =
+        burnAfter ?? _burnAfterByConversation[_key(toType, peerId)];
     final message = Message(
       id: _uuid.v4(),
       fromId: _currentUserId,
       toId: peerId,
       toType: toType,
-      type: burnAfter == null ? MessageType.text : MessageType.burn,
+      type: effectiveBurnAfter == null ? MessageType.text : MessageType.burn,
       content: trimmed,
       timestamp: DateTime.now().toUtc(),
-      burnAfter: burnAfter,
+      burnAfter: effectiveBurnAfter,
       status: MessageStatus.sent,
     );
     await _upsertLocal(message);
@@ -295,6 +319,8 @@ class ChatProvider extends ChangeNotifier {
         await _markBurnStarted(
           message?.id ?? _messageIdFromPayload(event.payload),
         );
+      case 'conversation.burn.updated':
+        _handleBurnSetting(event.payload);
     }
   }
 
@@ -363,6 +389,51 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _sendReadReceipts(List<Message> messages) async {
+    for (final message in messages) {
+      if (message.fromId == _currentUserId ||
+          message.status == MessageStatus.read ||
+          message.status == MessageStatus.burned ||
+          message.status == MessageStatus.revoked) {
+        continue;
+      }
+      _webSocketService.send(
+        WebSocketEvent(
+          type: 'message.read',
+          payload: {'messageId': message.id},
+        ),
+      );
+    }
+  }
+
+  void _handleBurnSetting(Map<String, dynamic> payload) {
+    final setting = payload['setting'];
+    if (setting is! Map) {
+      return;
+    }
+    final peerIds = (setting['peerIds'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(growable: false);
+    final burnAfter = _toInt(setting['burnAfter']);
+    _setBurnSettingFromPeerIds(peerIds: peerIds, burnAfterSeconds: burnAfter);
+  }
+
+  void _setBurnSettingFromPeerIds({
+    required List<String> peerIds,
+    required int burnAfterSeconds,
+  }) {
+    final peerId = peerIds.firstWhere(
+      (id) => id != _currentUserId,
+      orElse: () => '',
+    );
+    if (peerId.isEmpty) {
+      return;
+    }
+    _burnAfterByConversation[_key(ConversationType.user, peerId)] =
+        burnAfterSeconds > 0 ? Duration(seconds: burnAfterSeconds) : null;
+    notifyListeners();
+  }
+
   Future<void> markBurned(String messageId) {
     return _updateStatus(messageId, MessageStatus.burned);
   }
@@ -424,4 +495,14 @@ Message? _messageFromPayload(Map<String, dynamic> payload) {
 
 Object? _messageIdFromPayload(Map<String, dynamic> payload) {
   return payload['messageId'] ?? payload['message_id'] ?? payload['id'];
+}
+
+int _toInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

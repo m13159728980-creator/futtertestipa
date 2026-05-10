@@ -25,8 +25,12 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               ListTile(
                 title: Text(auth.user?.displayName ?? '未登录'),
-                subtitle: Text(auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}'),
-                leading: DefaultAvatar(index: auth.user?.avatarIndex ?? settings.avatarIndex),
+                subtitle: Text(
+                  auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}',
+                ),
+                leading: DefaultAvatar(
+                  index: auth.user?.avatarIndex ?? settings.avatarIndex,
+                ),
                 trailing: const Icon(Icons.edit_outlined),
                 onTap: () => _showRenameDialog(context, ref),
               ),
@@ -100,7 +104,9 @@ class SettingsScreen extends ConsumerWidget {
                 title: '默认阅后即焚',
                 value: settings.defaultBurnTimerSeconds,
                 items: const {0: '关闭', 10: '10 秒', 60: '1 分钟', 300: '5 分钟'},
-                onChanged: ref.read(settingsProvider).setDefaultBurnTimerSeconds,
+                onChanged: ref
+                    .read(settingsProvider)
+                    .setDefaultBurnTimerSeconds,
               ),
               SwitchListTile(
                 title: const Text('隐藏最后在线'),
@@ -164,9 +170,9 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () async {
                   await ref.read(settingsProvider).clearCache();
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('缓存已清空')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('缓存已清空')));
                   }
                 },
               ),
@@ -218,7 +224,10 @@ class SettingsScreen extends ConsumerWidget {
                     tooltip: avatar.label,
                     icon: DefaultAvatar(index: avatar.index, radius: 28),
                     onPressed: () async {
-                      await ref.read(settingsProvider).setAvatarIndex(avatar.index);
+                      await ref.read(authProvider).updateAvatar(avatar.index);
+                      await ref
+                          .read(settingsProvider)
+                          .setAvatarIndex(avatar.index);
                       if (context.mounted) {
                         Navigator.of(context).pop();
                       }
@@ -277,7 +286,8 @@ class SettingsScreen extends ConsumerWidget {
                       } catch (_) {
                         setState(() {
                           saving = false;
-                          errorText = ref.read(authProvider).errorMessage ?? '修改失败';
+                          errorText =
+                              ref.read(authProvider).errorMessage ?? '修改失败';
                         });
                       }
                     },
@@ -387,9 +397,9 @@ class _Section extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           ...children,

@@ -7,7 +7,7 @@ Date: 2026-05-10
 | File | Size | Notes |
 | --- | ---: | --- |
 | `dist/private-chat-debug.apk` | 179.54 MB | Debug APK, LAN server build |
-| `dist/private-chat-release.apk` | 81.81 MB | Release APK, public domain build with INTERNET permission |
+| `dist/private-chat-release.apk` | 81.79 MB | Release APK, public domain build with INTERNET and notification permission |
 
 ## Current Endpoints
 
@@ -26,6 +26,11 @@ Date: 2026-05-10
 - Message delivery now keeps the client-generated UUID on the server, so sender echoes replace the local draft instead of duplicating it.
 - Chat screens now sync the last 7 days of messages from `/api/messages/sync` when opened, so missed realtime events are recovered.
 - The main chat list was refreshed with a cleaner Material layout, account header, search field, clearer contact/group sections, and simpler new-chat actions.
+- Private burn mode is now a shared server-side conversation setting; either side can turn it on/off and both clients receive the update.
+- Message read receipts are sent when a conversation is opened; outgoing bubbles now use Telegram-style single-check/double-check indicators.
+- User avatar updates now go through the server and can be broadcast through WebSocket `user.updated`.
+- Android push-token registration endpoint and client hook are in place. Full automatic FCM token retrieval still requires adding Firebase project files and credentials.
+- Voice message tiles now use a Telegram-like play button plus waveform display.
 
 ## Debug APK
 

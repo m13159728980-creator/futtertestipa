@@ -173,6 +173,20 @@ function createPostgresUserRepository(query = db.query) {
         [id]
       );
       return mapUser(rows[0]);
+    },
+
+    async upsertPushToken(userId, token, platform) {
+      await query(
+        `
+          INSERT INTO push_tokens (user_id, token, platform, updated_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (token) DO UPDATE
+          SET user_id = EXCLUDED.user_id,
+              platform = EXCLUDED.platform,
+              updated_at = NOW()
+        `,
+        [userId, token, platform]
+      );
     }
   };
 }
@@ -248,6 +262,18 @@ function createUserService(options = {}) {
     return user;
   }
 
+  async function registerPushToken(userId, { token, platform = 'android' }) {
+    const normalizedToken = String(token || '').trim();
+    const normalizedPlatform = String(platform || 'android').trim().toLowerCase();
+    if (!normalizedToken) {
+      throw new UserServiceError('Push token is required', 400);
+    }
+    if (!['android', 'ios', 'web'].includes(normalizedPlatform)) {
+      throw new UserServiceError('Invalid push token platform', 400);
+    }
+    await repository.upsertPushToken(userId, normalizedToken, normalizedPlatform);
+  }
+
   async function softDelete(userId, confirmationAccount) {
     const activeUser = await repository.findActiveById(userId);
     if (!activeUser) {
@@ -268,6 +294,7 @@ function createUserService(options = {}) {
   return {
     isAccountAvailable,
     register,
+    registerPushToken,
     serializeUser,
     softDelete,
     updateAvatar,

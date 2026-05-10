@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
+import 'core/services/push_notification_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
@@ -61,6 +62,11 @@ class AuthenticatedChatShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(chatProvider);
+    ref.listen(authProvider, (previous, next) {
+      if (next.status == AuthStatus.authenticated) {
+        ref.read(pushNotificationServiceProvider).initialize();
+      }
+    });
     return const ChatListScreen();
   }
 }

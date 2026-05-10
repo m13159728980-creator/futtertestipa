@@ -194,6 +194,49 @@ void main() {
   });
 
   test(
+    'synced private burn setting applies to later outgoing messages',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'conversation.burn.updated',
+          payload: {
+            'setting': {
+              'toType': 'user',
+              'peerIds': ['me', 'alice'],
+              'burnAfter': 10,
+              'enabled': true,
+            },
+          },
+        ),
+      );
+      await provider.sendText('alice', 'synced secret');
+
+      expect(provider.burnAfterFor('alice'), const Duration(seconds: 10));
+      final message = provider.messagesFor('alice').single;
+      expect(message.type, MessageType.burn);
+      expect(message.burnAfter, const Duration(seconds: 10));
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
+
+  test(
     'backend message.send with payload.message upserts and increments unread',
     () async {
       final database = LocalDatabaseService(
@@ -230,6 +273,51 @@ void main() {
 
       provider.dispose();
       await database.close();
+    },
+  );
+
+  test(
+    'loading a conversation sends read receipts for incoming unread messages',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      await database.open();
+      await database.upsertMessage(
+        _message(
+          id: 'incoming-unread',
+          fromId: 'alice',
+          toId: 'me',
+          content: 'unread',
+        ),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+
+      await provider.loadMessages('alice');
+
+      expect(
+        socket.sentJson,
+        anyElement(
+          predicate<Map<String, dynamic>>(
+            (event) =>
+                event['type'] == 'message.read' &&
+                (event['payload'] as Map)['messageId'] == 'incoming-unread',
+          ),
+        ),
+      );
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
     },
   );
 
@@ -485,7 +573,21 @@ class _FakeApiService implements ApiService {
   }
 
   @override
+  Future<User> updateAvatar({required String token, required int avatarIndex}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<Message>> syncMessages({required String token}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> registerPushToken({
+    required String token,
+    required String pushToken,
+    String platform = 'android',
+  }) {
     throw UnimplementedError();
   }
 }

@@ -42,6 +42,21 @@ function createUserRoutes({ authMiddleware, userService }) {
     }
   });
 
+  router.post('/api/users/me/push-token', authMiddleware, async (req, res, next) => {
+    try {
+      await userService.registerPushToken(req.user.id, {
+        token: req.body?.token,
+        platform: req.body?.platform
+      });
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof UserServiceError) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
+      return next(error);
+    }
+  });
+
   router.delete('/api/users/me', authMiddleware, async (req, res, next) => {
     try {
       await userService.softDelete(req.user.id, req.body?.account);

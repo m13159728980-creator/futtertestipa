@@ -8,15 +8,22 @@ import 'package:app/providers/chat_provider.dart';
 import 'package:app/screens/call_screen.dart';
 import 'package:app/widgets/burn_mode_menu.dart';
 import 'package:app/widgets/chat_bubble.dart';
+import 'package:app/widgets/default_avatar.dart';
 import 'package:app/widgets/message_composer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({required this.peerId, required this.title, super.key});
+  const ChatScreen({
+    required this.peerId,
+    required this.title,
+    this.avatarIndex = 0,
+    super.key,
+  });
 
   final String peerId;
   final String title;
+  final int avatarIndex;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -24,8 +31,6 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   static const _secureWindowService = SecureWindowService();
-
-  Duration? _burnAfter;
 
   @override
   void initState() {
@@ -40,9 +45,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _setBurnAfter(Duration? duration) async {
-    setState(() {
-      _burnAfter = duration;
-    });
+    await ref.read(chatProvider).setBurnAfter(widget.peerId, duration);
     await _secureWindowService.setEnabled(duration != null);
   }
 
@@ -51,15 +54,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final chat = ref.watch(chatProvider);
     final currentUserId = ref.watch(authProvider).user?.id ?? '';
     final messages = chat.messagesFor(widget.peerId);
+    final burnAfter = chat.burnAfterFor(widget.peerId);
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: Row(
           children: [
-            const CircleAvatar(child: Icon(Icons.person)),
+            DefaultAvatar(index: widget.avatarIndex, radius: 20),
             const SizedBox(width: 12),
-            Expanded(child: Text(widget.title)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    burnAfter == null ? '在线' : '阅后即焚 ${burnAfter.inSeconds} 秒',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -68,7 +88,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () async {
               await ref
                   .read(callProvider)
-                  .startOneToOneCall(peerId: widget.peerId, peerName: widget.title);
+                  .startOneToOneCall(
+                    peerId: widget.peerId,
+                    peerName: widget.title,
+                  );
               if (context.mounted) {
                 await Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const CallScreen()),
@@ -77,7 +100,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             icon: const Icon(Icons.call),
           ),
-          BurnModeMenu(selected: _burnAfter, onSelected: _setBurnAfter),
+          BurnModeMenu(selected: burnAfter, onSelected: _setBurnAfter),
         ],
       ),
       body: Column(
@@ -91,9 +114,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
           MessageComposer(
-            onSend: (text) => ref
-                .read(chatProvider)
-                .sendText(widget.peerId, text, burnAfter: _burnAfter),
+            onSend: (text) =>
+                ref.read(chatProvider).sendText(widget.peerId, text),
           ),
         ],
       ),

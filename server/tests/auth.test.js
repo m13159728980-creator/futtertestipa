@@ -62,6 +62,14 @@ function createMemoryUserRepository() {
         purgeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       };
       return user;
+    },
+    async upsertPushToken(userId, token, platform) {
+      const user = users.find((candidate) => candidate.id === Number(userId) && !candidate.deletedAt);
+      if (!user) {
+        return null;
+      }
+      user.pushToken = { token, platform };
+      return user.pushToken;
     }
   };
 }
@@ -251,6 +259,21 @@ test('PATCH /api/users/me/profile rejects blank displayName', async () => {
 
   expect(res.status).toBe(400);
   expect(res.body).toEqual({ message: '请输入名字' });
+});
+
+test('POST /api/users/me/push-token stores an Android FCM token', async () => {
+  const repository = createMemoryUserRepository();
+  const app = createApp({ userRepository: repository });
+  const registered = await register(app, 'Push User');
+
+  const res = await request(app)
+    .post('/api/users/me/push-token')
+    .set('Authorization', `Bearer ${registered.token}`)
+    .send({ token: 'fcm-token-1', platform: 'android' });
+
+  expect(res.status).toBe(204);
+  const user = await repository.findActiveById(registered.user.id);
+  expect(user.pushToken).toEqual({ token: 'fcm-token-1', platform: 'android' });
 });
 
 test('DELETE /api/users/me rejects missing confirmation', async () => {

@@ -38,7 +38,12 @@ class ChatBubble extends StatelessWidget {
           key: const Key('chat-bubble-decoration'),
           decoration: BoxDecoration(
             color: isMine ? mineColor : otherColor,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(14),
+              topRight: const Radius.circular(14),
+              bottomLeft: Radius.circular(isMine ? 14 : 4),
+              bottomRight: Radius.circular(isMine ? 4 : 14),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -79,12 +84,7 @@ class ChatBubble extends StatelessWidget {
                             )
                           : const SizedBox.shrink(),
                     ),
-                    Text(
-                      _statusText(message.status),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: Colors.black54),
-                    ),
+                    _MessageStatusIcon(status: message.status, visible: isMine),
                   ],
                 ),
               ],
@@ -94,15 +94,29 @@ class ChatBubble extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _statusText(MessageStatus status) {
-    return switch (status) {
-      MessageStatus.sent => 'sent',
-      MessageStatus.delivered => 'delivered',
-      MessageStatus.read => 'read',
-      MessageStatus.burned => 'burned',
-      MessageStatus.revoked => 'revoked',
+class _MessageStatusIcon extends StatelessWidget {
+  const _MessageStatusIcon({required this.status, required this.visible});
+
+  final MessageStatus status;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) {
+      return const SizedBox.shrink();
+    }
+    final color = status == MessageStatus.read
+        ? const Color(0xFF2AABEE)
+        : Colors.black45;
+    final icon = switch (status) {
+      MessageStatus.sent => Icons.check,
+      MessageStatus.delivered || MessageStatus.read => Icons.done_all,
+      MessageStatus.burned => Icons.local_fire_department,
+      MessageStatus.revoked => Icons.block,
     };
+    return Icon(icon, size: 16, color: color);
   }
 }
 
