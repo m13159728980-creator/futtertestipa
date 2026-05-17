@@ -178,6 +178,7 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
 
   DateTime? _startedAt;
   Timer? _ticker;
+  OverlayEntry? _overlayEntry;
   Duration _elapsed = Duration.zero;
   bool _sending = false;
 
@@ -186,6 +187,7 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _removeOverlay();
     super.dispose();
   }
 
@@ -203,6 +205,7 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
           _elapsed = Duration.zero;
           _sending = false;
         });
+        _showOverlay();
         _ticker?.cancel();
         _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
         try {
@@ -229,10 +232,6 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
             Icon(_recording ? Icons.graphic_eq : Icons.mic),
             const SizedBox(width: 8),
             Text(_recording ? '松开发送' : '按住说话'),
-            if (_recording) ...[
-              const SizedBox(width: 8),
-              Text(_formatRecordingDuration(_elapsed)),
-            ],
           ],
         ),
       ),
@@ -249,6 +248,7 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
       return;
     }
     setState(() => _elapsed = elapsed);
+    _overlayEntry?.markNeedsBuild();
   }
 
   void _finishRecording({Duration? forcedDuration}) {
@@ -271,6 +271,7 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
   void _resetRecording() {
     _ticker?.cancel();
     _ticker = null;
+    _removeOverlay();
     if (!mounted) {
       _startedAt = null;
       _elapsed = Duration.zero;
@@ -283,9 +284,72 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
       _sending = false;
     });
   }
+
+  void _showOverlay() {
+    _removeOverlay();
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      return;
+    }
+    _overlayEntry = OverlayEntry(
+      builder: (context) => _VoiceRecordOverlay(duration: _elapsed),
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
 }
 
 String _formatRecordingDuration(Duration duration) {
   final seconds = duration.inSeconds.clamp(0, 60);
   return '00:${seconds.toString().padLeft(2, '0')}';
+}
+
+class _VoiceRecordOverlay extends StatelessWidget {
+  const _VoiceRecordOverlay({required this.duration});
+
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: Material(
+          key: const Key('voice-record-overlay'),
+          color: Colors.transparent,
+          child: Container(
+            width: 136,
+            height: 136,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.76),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.graphic_eq, color: Colors.white, size: 44),
+                const SizedBox(height: 12),
+                Text(
+                  _formatRecordingDuration(duration),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '松开发送',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

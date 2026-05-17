@@ -4,10 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('ios app delegate registers voice playback channel', () async {
-    final source = await File('ios/Runner/AppDelegate.swift').readAsString();
+    final appDelegate = await File(
+      'ios/Runner/AppDelegate.swift',
+    ).readAsString();
+    final sceneDelegate = await File(
+      'ios/Runner/SceneDelegate.swift',
+    ).readAsString();
 
-    expect(source, contains('app/voice_playback'));
-    expect(source, contains('AVAudioPlayer'));
-    expect(source, contains('playVoice'));
+    expect(appDelegate, contains('AVAudioPlayer'));
+    expect(appDelegate, contains('static let shared = VoicePlaybackController()'));
+    expect(sceneDelegate, contains('app/voice_playback'));
+    expect(sceneDelegate, contains('FlutterViewController'));
+    expect(sceneDelegate, contains('registerVoicePlaybackChannel'));
+    expect(sceneDelegate, contains('VoicePlaybackController.shared'));
   });
 }

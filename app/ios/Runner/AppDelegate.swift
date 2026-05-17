@@ -1,67 +1,30 @@
-import Flutter
 import AVFoundation
+import Flutter
 import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  private var voicePlayer: AVAudioPlayer?
-
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    if let controller = window?.rootViewController as? FlutterViewController {
-      registerVoicePlaybackChannel(controller: controller)
-    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
+}
 
-  private func registerVoicePlaybackChannel(controller: FlutterViewController) {
-    FlutterMethodChannel(
-      name: "app/voice_playback",
-      binaryMessenger: controller.binaryMessenger
-    ).setMethodCallHandler { [weak self] call, result in
-      guard let self = self else {
-        result(false)
-        return
-      }
-      switch call.method {
-      case "play":
-        guard
-          let arguments = call.arguments as? [String: Any],
-          let source = arguments["source"] as? String,
-          !source.isEmpty
-        else {
-          result(false)
-          return
-        }
-        do {
-          try self.playVoice(source: source)
-          result(true)
-        } catch {
-          result(
-            FlutterError(
-              code: "VOICE_PLAYBACK_FAILED",
-              message: error.localizedDescription,
-              details: nil
-            )
-          )
-        }
-      case "stop":
-        self.stopVoice()
-        result(nil)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
-  }
+final class VoicePlaybackController {
+  static let shared = VoicePlaybackController()
 
-  private func playVoice(source: String) throws {
-    stopVoice()
+  private var voicePlayer: AVAudioPlayer?
+
+  private init() {}
+
+  func play(source: String) throws {
+    stop()
     try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
     try AVAudioSession.sharedInstance().setActive(true)
     let data = try Data(contentsOf: url(for: source))
@@ -71,7 +34,7 @@ import UIKit
     voicePlayer = player
   }
 
-  private func stopVoice() {
+  func stop() {
     voicePlayer?.stop()
     voicePlayer = nil
   }
