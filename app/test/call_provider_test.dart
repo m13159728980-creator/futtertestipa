@@ -39,6 +39,7 @@ void main() {
       'description': {'type': 'offer', 'sdp': 'offer-sdp'},
     });
     expect(media.localMediaStarted, isTrue);
+    expect(media.lastVideoEnabled, isFalse);
     expect(
       media.localDescriptions,
       containsPair('alice', media.offers['alice']),
@@ -88,6 +89,7 @@ void main() {
     expect(provider.session?.startedAt, DateTime.utc(2026, 5, 10, 1));
     expect(signaling.sent.last.type, 'call.accept');
     expect(media.localMediaStarted, isTrue);
+    expect(media.lastVideoEnabled, isFalse);
   });
 
   test('toggles local mic speaker and camera', () async {
@@ -110,59 +112,150 @@ void main() {
     expect(media.cameraEnabled, isFalse);
   });
 
-  test('receiving offer sets remote description and sends answer', () async {
-    final signaling = _FakeSignalingService();
-    final media = _FakeWebRtcService();
-    media.answers['alice'] = const RtcSessionDescription(
-      type: 'answer',
-      sdp: 'answer-sdp',
-    );
-    final provider = CallProvider(
-      currentUserId: 'me',
-      signalingService: signaling,
-      webRtcService: media,
-    );
-    await provider.handleEvent(
-      const WebSocketEvent(
-        type: 'call.invite',
-        payload: {
-          'callId': 'call-2',
-          'fromId': 'alice',
-          'participantIds': ['me'],
-          'isGroup': false,
-        },
-      ),
-    );
+  test(
+    'active call receiving offer sets remote description and sends answer',
+    () async {
+      final signaling = _FakeSignalingService();
+      final media = _FakeWebRtcService();
+      media.answers['alice'] = const RtcSessionDescription(
+        type: 'answer',
+        sdp: 'answer-sdp',
+      );
+      final provider = CallProvider(
+        currentUserId: 'me',
+        signalingService: signaling,
+        webRtcService: media,
+      );
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.invite',
+          payload: {
+            'callId': 'call-2',
+            'fromId': 'alice',
+            'participantIds': ['me'],
+            'isGroup': false,
+          },
+        ),
+      );
+      await provider.accept();
+      signaling.sent.clear();
 
-    await provider.handleEvent(
-      const WebSocketEvent(
-        type: 'call.sdp',
-        payload: {
-          'callId': 'call-2',
-          'fromId': 'alice',
-          'description': {'type': 'offer', 'sdp': 'offer-sdp'},
-        },
-      ),
-    );
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.sdp',
+          payload: {
+            'callId': 'call-2',
+            'fromId': 'alice',
+            'description': {'type': 'offer', 'sdp': 'offer-sdp'},
+          },
+        ),
+      );
 
-    expect(
-      media.remoteDescriptions,
-      containsPair(
-        'alice',
-        const RtcSessionDescription(type: 'offer', sdp: 'offer-sdp'),
-      ),
-    );
-    expect(
-      media.localDescriptions,
-      containsPair('alice', media.answers['alice']),
-    );
-    expect(signaling.sent.single.type, 'call.sdp');
-    expect(signaling.sent.single.payload, {
-      'callId': 'call-2',
-      'targetId': 'alice',
-      'description': {'type': 'answer', 'sdp': 'answer-sdp'},
-    });
-  });
+      expect(
+        media.remoteDescriptions,
+        containsPair(
+          'alice',
+          const RtcSessionDescription(type: 'offer', sdp: 'offer-sdp'),
+        ),
+      );
+      expect(
+        media.localDescriptions,
+        containsPair('alice', media.answers['alice']),
+      );
+      expect(signaling.sent.single.type, 'call.sdp');
+      expect(signaling.sent.single.payload, {
+        'callId': 'call-2',
+        'targetId': 'alice',
+        'description': {'type': 'answer', 'sdp': 'answer-sdp'},
+      });
+    },
+  );
+
+  test(
+    'incoming offer waits until accept so local media is attached first',
+    () async {
+      final signaling = _FakeSignalingService();
+      final media = _FakeWebRtcService();
+      media.answers['alice'] = const RtcSessionDescription(
+        type: 'answer',
+        sdp: 'answer-sdp',
+      );
+      final provider = CallProvider(
+        currentUserId: 'me',
+        signalingService: signaling,
+        webRtcService: media,
+      );
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.invite',
+          payload: {
+            'callId': 'call-2',
+            'fromId': 'alice',
+            'participantIds': ['alice', 'me'],
+            'isGroup': false,
+          },
+        ),
+      );
+
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.sdp',
+          payload: {
+            'callId': 'call-2',
+            'fromId': 'alice',
+            'description': {'type': 'offer', 'sdp': 'offer-sdp'},
+          },
+        ),
+      );
+
+      expect(signaling.sent, isEmpty);
+      expect(media.remoteDescriptions, isEmpty);
+
+      await provider.accept();
+
+      expect(media.localMediaStarted, isTrue);
+      expect(
+        media.remoteDescriptions,
+        containsPair(
+          'alice',
+          const RtcSessionDescription(type: 'offer', sdp: 'offer-sdp'),
+        ),
+      );
+      expect(signaling.sent.map((event) => event.type), [
+        'call.accept',
+        'call.sdp',
+      ]);
+    },
+  );
+
+  test(
+    'incoming invite notifies listeners so the shell can open call screen',
+    () async {
+      var listenerCalls = 0;
+      final provider = CallProvider(
+        currentUserId: 'me',
+        signalingService: _FakeSignalingService(),
+        webRtcService: _FakeWebRtcService(),
+      )..addListener(() => listenerCalls += 1);
+
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.invite',
+          payload: {
+            'callId': 'call-2',
+            'fromId': 'alice',
+            'participantIds': ['alice', 'me'],
+            'isGroup': false,
+            'title': 'Alice',
+          },
+        ),
+      );
+
+      expect(provider.session?.state, CallState.incoming);
+      expect(provider.session?.title, 'Alice');
+      expect(listenerCalls, 1);
+    },
+  );
 
   test('receiving answer sets remote description', () async {
     final media = _FakeWebRtcService();
@@ -238,6 +331,7 @@ class _FakeSignalingService implements CallSignalingService {
 
 class _FakeWebRtcService implements WebRtcService {
   bool localMediaStarted = false;
+  bool? lastVideoEnabled;
   bool micEnabled = true;
   bool speakerEnabled = false;
   bool cameraEnabled = true;
@@ -250,6 +344,7 @@ class _FakeWebRtcService implements WebRtcService {
   @override
   Future<void> startLocalMedia({bool video = true}) async {
     localMediaStarted = true;
+    lastVideoEnabled = video;
   }
 
   @override

@@ -32,13 +32,19 @@ class SocialProvider extends ChangeNotifier {
 
   final List<User> _contacts = [];
   final List<Group> _groups = [];
+  final Set<String> _onlineUserIds = {};
   bool _isLoading = false;
   String? _errorMessage;
+  Future<void>? _refreshFuture;
 
   List<User> get contacts => List.unmodifiable(_contacts);
   List<Group> get groups => List.unmodifiable(_groups);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  bool isOnline(String userId) {
+    return _onlineUserIds.contains(userId);
+  }
 
   String? get _token {
     final token = _auth.user?.token;
@@ -57,6 +63,9 @@ class SocialProvider extends ChangeNotifier {
       _contacts
         ..clear()
         ..addAll(await _apiService.listContacts(token: token));
+      _groups
+        ..clear()
+        ..addAll(await _apiService.listGroups(token: token));
     } on ApiException catch (error) {
       _errorMessage = error.message;
     } finally {
@@ -134,10 +143,26 @@ class SocialProvider extends ChangeNotifier {
   }
 
   void _handleEvent(WebSocketEvent event) {
-    if (event.type != 'user.updated') {
-      return;
+    switch (event.type) {
+      case 'user.updated':
+        _handleUserUpdated(event.payload);
+      case 'presence.snapshot':
+        _handlePresenceSnapshot(event.payload);
+      case 'presence.updated':
+        _handlePresenceUpdated(event.payload);
+      case 'group.updated':
+        _handleGroupUpdated(event.payload);
+      case 'contact.updated':
+        _refreshListsSoon();
+      case 'message.send':
+      case 'message.created':
+      case 'message.received':
+        _refreshListsSoon();
     }
-    final source = event.payload['user'];
+  }
+
+  void _handleUserUpdated(Map<String, dynamic> payload) {
+    final source = payload['user'];
     if (source is! Map) {
       return;
     }
@@ -148,6 +173,46 @@ class SocialProvider extends ChangeNotifier {
     }
     _contacts[index] = updated;
     notifyListeners();
+  }
+
+  void _handlePresenceSnapshot(Map<String, dynamic> payload) {
+    final ids = payload['onlineUserIds'];
+    if (ids is! List) {
+      return;
+    }
+    _onlineUserIds
+      ..clear()
+      ..addAll(ids.map((id) => id.toString()));
+    notifyListeners();
+  }
+
+  void _handlePresenceUpdated(Map<String, dynamic> payload) {
+    final userId = payload['userId']?.toString();
+    if (userId == null || userId.isEmpty) {
+      return;
+    }
+    if (payload['isOnline'] == true) {
+      _onlineUserIds.add(userId);
+    } else {
+      _onlineUserIds.remove(userId);
+    }
+    notifyListeners();
+  }
+
+  void _handleGroupUpdated(Map<String, dynamic> payload) {
+    final source = payload['group'];
+    if (source is! Map) {
+      _refreshListsSoon();
+      return;
+    }
+    rememberGroup(Group.fromJson(Map<String, dynamic>.from(source)));
+  }
+
+  void _refreshListsSoon() {
+    _refreshFuture ??= Future<void>.delayed(Duration.zero, () async {
+      _refreshFuture = null;
+      await load();
+    });
   }
 
   @override

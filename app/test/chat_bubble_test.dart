@@ -86,6 +86,100 @@ void main() {
     expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
     expect(find.textContaining('0:03'), findsOneWidget);
   });
+
+  testWidgets(
+    'burn voice messages render a playable voice tile instead of JSON',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatBubble(
+              message: _message(
+                fromId: 'alice',
+                type: MessageType.burn,
+                burnAfter: const Duration(seconds: 10),
+                content:
+                    '{"kind":"voice","url":"/media/voice-1","durationMs":3000,"sizeBytes":2048}',
+              ),
+              currentUserId: 'me',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+      expect(find.textContaining('"url"'), findsNothing);
+    },
+  );
+
+  testWidgets('legacy burn voice URL messages render as voice tiles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.burn,
+              burnAfter: const Duration(seconds: 10),
+              content: '/media/voice-legacy.m4a',
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('/media/voice-legacy.m4a'), findsNothing);
+    expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+    expect(find.byKey(const Key('voice-message-play-button')), findsOneWidget);
+  });
+
+  testWidgets('burn JSON text stays text when it is not voice metadata', (
+    tester,
+  ) async {
+    const content = '{"kind":"note","text":"hello"}';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.burn,
+              burnAfter: const Duration(seconds: 10),
+              content: content,
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(content), findsOneWidget);
+    expect(find.byKey(const Key('media-message-tile')), findsNothing);
+  });
+
+  testWidgets('message bubbles show the send time under the message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'me',
+              timestamp: DateTime(2026, 5, 10, 1, 2),
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('chat-bubble-time')), findsOneWidget);
+    expect(find.text('01:02'), findsOneWidget);
+  });
 }
 
 BoxDecoration _bubbleDecoration(WidgetTester tester) {
@@ -100,6 +194,7 @@ Message _message({
   MessageType type = MessageType.text,
   Duration? burnAfter,
   String? content,
+  DateTime? timestamp,
 }) {
   return Message(
     id: 'm1',
@@ -108,7 +203,7 @@ Message _message({
     toType: ConversationType.user,
     type: type,
     content: content ?? 'hello',
-    timestamp: DateTime.utc(2026, 5, 10, 1),
+    timestamp: timestamp ?? DateTime.utc(2026, 5, 10, 1),
     burnAfter: burnAfter,
     status: MessageStatus.sent,
   );

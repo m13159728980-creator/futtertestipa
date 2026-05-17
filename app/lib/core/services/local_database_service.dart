@@ -14,6 +14,7 @@ abstract interface class MessageStore {
     required ConversationType toType,
     required String peerId,
     String? currentUserId,
+    bool includeBurned = false,
   });
 
   Future<Map<String, Object?>?> getById(String id);
@@ -62,11 +63,13 @@ class LocalDatabaseService {
     required ConversationType toType,
     required String peerId,
     String? currentUserId,
+    bool includeBurned = false,
   }) async {
     final rows = await _store.listByConversation(
       toType: toType,
       peerId: peerId,
       currentUserId: currentUserId,
+      includeBurned: includeBurned,
     );
     return Future.wait(rows.map(_messageFromRow));
   }
@@ -164,28 +167,34 @@ class SqfliteMessageStore implements MessageStore {
     required ConversationType toType,
     required String peerId,
     String? currentUserId,
+    bool includeBurned = false,
   }) {
+    final statusFilter = includeBurned ? '' : ' AND status <> ?';
     if (toType == ConversationType.user && currentUserId != null) {
       return _db.query(
         'messages',
         where:
             'to_type = ? AND ((from_id = ? AND to_id = ?) OR '
-            '(from_id = ? AND to_id = ?)) AND status <> ?',
+            '(from_id = ? AND to_id = ?))$statusFilter',
         whereArgs: [
           toType.name,
           currentUserId,
           peerId,
           peerId,
           currentUserId,
-          MessageStatus.burned.name,
+          if (!includeBurned) MessageStatus.burned.name,
         ],
         orderBy: 'timestamp ASC',
       );
     }
     return _db.query(
       'messages',
-      where: 'to_type = ? AND to_id = ? AND status <> ?',
-      whereArgs: [toType.name, peerId, MessageStatus.burned.name],
+      where: 'to_type = ? AND to_id = ?$statusFilter',
+      whereArgs: [
+        toType.name,
+        peerId,
+        if (!includeBurned) MessageStatus.burned.name,
+      ],
       orderBy: 'timestamp ASC',
     );
   }
@@ -256,6 +265,7 @@ class InMemoryMessageStore implements MessageStore {
     required ConversationType toType,
     required String peerId,
     String? currentUserId,
+    bool includeBurned = false,
   }) async {
     _checkOpen();
     final rows =
@@ -266,6 +276,7 @@ class InMemoryMessageStore implements MessageStore {
                 toType: toType,
                 peerId: peerId,
                 currentUserId: currentUserId,
+                includeBurned: includeBurned,
               ),
             )
             .map(Map<String, Object?>.from)
@@ -282,11 +293,12 @@ class InMemoryMessageStore implements MessageStore {
     required ConversationType toType,
     required String peerId,
     required String? currentUserId,
+    required bool includeBurned,
   }) {
     if (row['to_type'] != toType.name) {
       return false;
     }
-    if (row['status'] == MessageStatus.burned.name) {
+    if (!includeBurned && row['status'] == MessageStatus.burned.name) {
       return false;
     }
     if (toType != ConversationType.user || currentUserId == null) {

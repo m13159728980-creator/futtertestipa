@@ -39,7 +39,9 @@ async function authedServer() {
     sockets[id] = createFakeSocket();
     socketServer.handleConnection(sockets[id]);
     await sockets[id].emitMessage({ type: 'auth', token: `user-${id}` });
-    sockets[id].sent.length = 0;
+    for (const socket of Object.values(sockets)) {
+      socket.sent.length = 0;
+    }
   }
   return { socketServer, sockets };
 }

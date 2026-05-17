@@ -37,7 +37,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     final calls = ref.watch(callProvider);
     final session = calls.session;
     if (session == null) {
-      return const Scaffold(body: Center(child: Text('No active call')));
+      return const Scaffold(body: Center(child: Text('没有正在进行的通话')));
     }
 
     return Scaffold(
@@ -60,6 +60,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
               isMicMuted: calls.isMicMuted,
               isSpeakerOn: calls.isSpeakerOn,
               isCameraOff: calls.isCameraOff,
+              showCameraToggle: calls.isVideoCall,
               onToggleMic: () => ref.read(callProvider).toggleMic(),
               onToggleSpeaker: () => ref.read(callProvider).toggleSpeaker(),
               onToggleCamera: () => ref.read(callProvider).toggleCamera(),
@@ -91,7 +92,10 @@ class _CallBody extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 44,
-            child: Icon(session.isGroup ? Icons.groups : Icons.person, size: 44),
+            child: Icon(
+              session.isGroup ? Icons.groups : Icons.person,
+              size: 44,
+            ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -123,13 +127,13 @@ class _CallBody extends StatelessWidget {
   String _statusText(CallSession session) {
     switch (session.state) {
       case CallState.incoming:
-        return 'Incoming call';
+        return '来电';
       case CallState.outgoing:
-        return 'Calling...';
+        return '正在呼叫...';
       case CallState.active:
         return _formatDuration(session.duration(DateTime.now()));
       case CallState.ended:
-        return 'Call ended';
+        return '通话已结束';
     }
   }
 
@@ -161,7 +165,7 @@ class _IncomingActions extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: onAccept,
                 icon: const Icon(Icons.call),
-                label: const Text('Accept'),
+                label: const Text('接听'),
               ),
             ),
             const SizedBox(width: 12),
@@ -169,7 +173,7 @@ class _IncomingActions extends StatelessWidget {
               child: FilledButton.tonalIcon(
                 onPressed: onReject,
                 icon: const Icon(Icons.call_end),
-                label: const Text('Reject'),
+                label: const Text('拒绝'),
               ),
             ),
           ],

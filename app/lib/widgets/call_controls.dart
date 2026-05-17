@@ -5,6 +5,7 @@ class CallControls extends StatelessWidget {
     required this.isMicMuted,
     required this.isSpeakerOn,
     required this.isCameraOff,
+    this.showCameraToggle = true,
     required this.onToggleMic,
     required this.onToggleSpeaker,
     required this.onToggleCamera,
@@ -15,6 +16,7 @@ class CallControls extends StatelessWidget {
   final bool isMicMuted;
   final bool isSpeakerOn;
   final bool isCameraOff;
+  final bool showCameraToggle;
   final VoidCallback onToggleMic;
   final VoidCallback onToggleSpeaker;
   final VoidCallback onToggleCamera;
@@ -38,11 +40,12 @@ class CallControls extends StatelessWidget {
               tooltip: isSpeakerOn ? 'Disable speaker' : 'Enable speaker',
               onPressed: onToggleSpeaker,
             ),
-            _RoundControl(
-              icon: isCameraOff ? Icons.videocam_off : Icons.videocam,
-              tooltip: isCameraOff ? 'Enable camera' : 'Disable camera',
-              onPressed: onToggleCamera,
-            ),
+            if (showCameraToggle)
+              _RoundControl(
+                icon: isCameraOff ? Icons.videocam_off : Icons.videocam,
+                tooltip: isCameraOff ? 'Enable camera' : 'Disable camera',
+                onPressed: onToggleCamera,
+              ),
             _RoundControl(
               icon: Icons.call_end,
               tooltip: 'Hang up',

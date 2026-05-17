@@ -6,6 +6,7 @@ import 'package:app/providers/settings_provider.dart';
 import 'package:app/screens/app_lock_screen.dart';
 import 'package:app/widgets/default_avatar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -17,26 +18,26 @@ class SettingsScreen extends ConsumerWidget {
     final auth = ref.watch(authProvider);
 
     return Scaffold(
+      backgroundColor: _settingsBackground(context),
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
+          _ProfileHeader(
+            displayName: auth.user?.displayName ?? '未登录',
+            account: auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}',
+            avatarIndex: auth.user?.avatarIndex ?? settings.avatarIndex,
+            onTap: () => _showRenameDialog(context, ref),
+            onCopyId: auth.user == null
+                ? null
+                : () => _copyOwnId(context, auth.user!.account),
+          ),
           _Section(
             title: '账号',
             children: [
               ListTile(
-                title: Text(auth.user?.displayName ?? '未登录'),
-                subtitle: Text(
-                  auth.user == null ? 'ID: -' : 'ID: ${auth.user!.account}',
-                ),
-                leading: DefaultAvatar(
-                  index: auth.user?.avatarIndex ?? settings.avatarIndex,
-                ),
-                trailing: const Icon(Icons.edit_outlined),
-                onTap: () => _showRenameDialog(context, ref),
-              ),
-              ListTile(
                 key: const ValueKey('settings-avatar'),
-                leading: DefaultAvatar(index: settings.avatarIndex),
+                leading: const _SettingsIcon(Icons.account_circle_outlined),
                 title: const Text('更换默认头像'),
                 subtitle: Text('头像 ${settings.avatarIndex + 1}'),
                 trailing: const Icon(Icons.chevron_right),
@@ -44,7 +45,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListTile(
                 title: const Text('应用锁'),
-                leading: const Icon(Icons.lock_outline),
+                leading: const _SettingsIcon(Icons.lock_outline),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -55,19 +56,15 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           _Section(
-            title: '语言',
+            title: '界面',
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'zh', label: Text('中文')),
-                    ButtonSegment(value: 'en', label: Text('English')),
-                  ],
-                  selected: {settings.languageCode},
-                  onSelectionChanged: (selected) =>
-                      ref.read(settingsProvider).setLanguage(selected.single),
-                ),
+              _DropdownTile<String>(
+                key: const ValueKey('settings-language-tile'),
+                icon: Icons.language_outlined,
+                title: '语言',
+                value: settings.languageCode,
+                items: const {'zh': '中文', 'en': 'English'},
+                onChanged: ref.read(settingsProvider).setLanguage,
               ),
             ],
           ),
@@ -75,16 +72,19 @@ class SettingsScreen extends ConsumerWidget {
             title: '通知',
             children: [
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.notifications_none),
                 title: const Text('消息通知'),
                 value: settings.messageNotifications,
                 onChanged: ref.read(settingsProvider).setMessageNotifications,
               ),
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.volume_up_outlined),
                 title: const Text('声音'),
                 value: settings.soundNotifications,
                 onChanged: ref.read(settingsProvider).setSoundNotifications,
               ),
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.vibration),
                 title: const Text('震动'),
                 value: settings.vibrationNotifications,
                 onChanged: ref.read(settingsProvider).setVibrationNotifications,
@@ -96,11 +96,15 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               SwitchListTile(
                 key: const ValueKey('secure-screen-switch'),
+                secondary: const _SettingsIcon(
+                  Icons.screenshot_monitor_outlined,
+                ),
                 title: const Text('禁止截屏'),
                 value: settings.disableScreenshots,
                 onChanged: ref.read(settingsProvider).setDisableScreenshots,
               ),
               _DropdownTile<int>(
+                icon: Icons.local_fire_department_outlined,
                 title: '默认阅后即焚',
                 value: settings.defaultBurnTimerSeconds,
                 items: const {0: '关闭', 10: '10 秒', 60: '1 分钟', 300: '5 分钟'},
@@ -109,6 +113,7 @@ class SettingsScreen extends ConsumerWidget {
                     .setDefaultBurnTimerSeconds,
               ),
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.visibility_off_outlined),
                 title: const Text('隐藏最后在线'),
                 value: settings.hideLastSeen,
                 onChanged: ref.read(settingsProvider).setHideLastSeen,
@@ -119,6 +124,7 @@ class SettingsScreen extends ConsumerWidget {
             title: '聊天',
             children: [
               _DropdownTile<AppAccentColor>(
+                icon: Icons.palette_outlined,
                 title: '主题颜色',
                 value: settings.accentColor,
                 items: const {
@@ -131,6 +137,7 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: ref.read(settingsProvider).setAccentColor,
               ),
               ListTile(
+                leading: const _SettingsIcon(Icons.format_size),
                 title: const Text('字体大小'),
                 subtitle: Slider(
                   value: settings.chatFontSize,
@@ -142,6 +149,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               _DropdownTile<ChatEnterKeyBehavior>(
+                icon: Icons.keyboard_return_outlined,
                 title: '发送键/换行键',
                 value: settings.enterKeyBehavior,
                 items: const {
@@ -151,6 +159,7 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: ref.read(settingsProvider).setEnterKeyBehavior,
               ),
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.mic_none),
                 title: const Text('长按录音'),
                 value: settings.holdToRecord,
                 onChanged: ref.read(settingsProvider).setHoldToRecord,
@@ -161,11 +170,13 @@ class SettingsScreen extends ConsumerWidget {
             title: '数据',
             children: [
               SwitchListTile(
+                secondary: const _SettingsIcon(Icons.wifi_outlined),
                 title: const Text('仅 WiFi 加载媒体'),
                 value: settings.wifiOnlyMediaLoading,
                 onChanged: ref.read(settingsProvider).setWifiOnlyMediaLoading,
               ),
               _DropdownTile<FileAutoDownloadLimit>(
+                icon: Icons.download_outlined,
                 title: '文件自动下载限制',
                 value: settings.fileAutoDownloadLimit,
                 items: const {
@@ -178,7 +189,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListTile(
                 title: const Text('清空缓存'),
-                leading: const Icon(Icons.cleaning_services_outlined),
+                leading: const _SettingsIcon(Icons.cleaning_services_outlined),
                 onTap: () async {
                   await ref.read(settingsProvider).clearCache();
                   if (context.mounted) {
@@ -206,9 +217,21 @@ class SettingsScreen extends ConsumerWidget {
           const _Section(
             title: '关于',
             children: [
-              ListTile(title: Text('版本'), subtitle: Text('1.0.0')),
-              ListTile(title: Text('隐私政策'), trailing: Icon(Icons.open_in_new)),
-              ListTile(title: Text('服务器状态'), subtitle: Text('wdsj.fun:10080')),
+              ListTile(
+                leading: _SettingsIcon(Icons.info_outline),
+                title: Text('版本'),
+                subtitle: Text('1.0.0'),
+              ),
+              ListTile(
+                leading: _SettingsIcon(Icons.privacy_tip_outlined),
+                title: Text('隐私政策'),
+                trailing: Icon(Icons.open_in_new),
+              ),
+              ListTile(
+                leading: _SettingsIcon(Icons.dns_outlined),
+                title: Text('服务器状态'),
+                subtitle: Text('wdsj.fun:10080'),
+              ),
             ],
           ),
         ],
@@ -251,6 +274,15 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _copyOwnId(BuildContext context, String account) async {
+    await Clipboard.setData(ClipboardData(text: account));
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ID 已复制')));
+    }
   }
 
   Future<void> _showRenameDialog(BuildContext context, WidgetRef ref) async {
@@ -405,30 +437,57 @@ class _Section extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 7),
             child: Text(
               title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: _sectionTitleColor(context),
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          ...children,
+          Container(
+            color: Theme.of(context).colorScheme.surface,
+            child: ListTileTheme(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              minLeadingWidth: 28,
+              iconColor: Theme.of(context).colorScheme.primary,
+              child: Column(children: _withDividers(context, children)),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  List<Widget> _withDividers(BuildContext context, List<Widget> children) {
+    final result = <Widget>[];
+    for (var index = 0; index < children.length; index += 1) {
+      result.add(children[index]);
+      if (index != children.length - 1) {
+        result.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 68),
+            child: Divider(height: 1, color: _dividerColor(context)),
+          ),
+        );
+      }
+    }
+    return result;
   }
 }
 
 class _DropdownTile<T> extends StatelessWidget {
   const _DropdownTile({
+    super.key,
+    this.icon,
     required this.title,
     required this.value,
     required this.items,
     required this.onChanged,
   });
 
+  final IconData? icon;
   final String title;
   final T value;
   final Map<T, String> items;
@@ -437,19 +496,149 @@ class _DropdownTile<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      leading: icon == null ? null : _SettingsIcon(icon!),
       title: Text(title),
-      trailing: DropdownButton<T>(
-        value: value,
-        items: [
-          for (final entry in items.entries)
-            DropdownMenuItem<T>(value: entry.key, child: Text(entry.value)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            items[value] ?? '',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: _settingsSecondaryText(context),
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right),
         ],
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
+      ),
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final entry in items.entries)
+                ListTile(
+                  title: Text(entry.value),
+                  trailing: entry.key == value
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () {
+                    onChanged(entry.key);
+                    Navigator.of(context).pop();
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({
+    required this.displayName,
+    required this.account,
+    required this.avatarIndex,
+    required this.onTap,
+    this.onCopyId,
+  });
+
+  final String displayName;
+  final String account;
+  final int avatarIndex;
+  final VoidCallback onTap;
+  final VoidCallback? onCopyId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+          child: Row(
+            children: [
+              DefaultAvatar(index: avatarIndex, radius: 34),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      account,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _settingsSecondaryText(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('settings-copy-id'),
+                tooltip: '复制 ID',
+                onPressed: onCopyId,
+                icon: Icon(
+                  Icons.copy_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsIcon extends StatelessWidget {
+  const _SettingsIcon(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, color: Theme.of(context).colorScheme.primary);
+  }
+}
+
+Color _settingsBackground(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Theme.of(context).scaffoldBackgroundColor
+      : const Color(0xFFEFF3F8);
+}
+
+Color _settingsSecondaryText(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white70
+      : const Color(0xFF6D7885);
+}
+
+Color _sectionTitleColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white70
+      : const Color(0xFF6D7885);
+}
+
+Color _dividerColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFFE0E6EC);
 }

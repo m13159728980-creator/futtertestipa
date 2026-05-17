@@ -166,6 +166,7 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, List<Message>> _messagesByConversation = {};
   final Map<String, int> _unreadCounts = {};
   final Map<String, Duration?> _burnAfterByConversation = {};
+  String? _activeConversationKey;
   bool _isLoading = false;
   Future<void>? _openDatabaseFuture;
 
@@ -192,6 +193,24 @@ class ChatProvider extends ChangeNotifier {
     return _unreadCounts[_key(ConversationType.user, peerId)] ?? 0;
   }
 
+  int unreadCountForConversation({
+    required ConversationType toType,
+    required String peerId,
+  }) {
+    return _unreadCounts[_key(toType, peerId)] ?? 0;
+  }
+
+  Message? lastMessageForConversation({
+    required ConversationType toType,
+    required String peerId,
+  }) {
+    final messages = _messagesByConversation[_key(toType, peerId)];
+    if (messages == null || messages.isEmpty) {
+      return null;
+    }
+    return messages.last;
+  }
+
   Duration? burnAfterFor(String peerId) {
     return _burnAfterByConversation[_key(ConversationType.user, peerId)];
   }
@@ -214,10 +233,23 @@ class ChatProvider extends ChangeNotifier {
     await loadConversation(toType: ConversationType.user, peerId: peerId);
   }
 
+  void closeConversation({
+    required ConversationType toType,
+    required String peerId,
+  }) {
+    final conversationKey = _key(toType, peerId);
+    if (_activeConversationKey != conversationKey) {
+      return;
+    }
+    _activeConversationKey = null;
+  }
+
   Future<void> loadConversation({
     required ConversationType toType,
     required String peerId,
   }) async {
+    final conversationKey = _key(toType, peerId);
+    _activeConversationKey = conversationKey;
     _isLoading = true;
     notifyListeners();
     await _ensureDatabaseOpen();
@@ -226,17 +258,25 @@ class ChatProvider extends ChangeNotifier {
       toType: toType,
       peerId: peerId,
       currentUserId: _currentUserId,
+      includeBurned: true,
     );
     final remote = await _syncService.sync(
       toType: toType,
       peerId: peerId,
       currentUserId: _currentUserId,
     );
+    final localBurnedIds = {
+      for (final message in local)
+        if (message.status == MessageStatus.burned) message.id,
+    };
     final merged = <String, Message>{
       for (final message in local)
         if (message.status != MessageStatus.burned) message.id: message,
     };
     for (final message in remote) {
+      if (localBurnedIds.contains(message.id)) {
+        continue;
+      }
       if (message.status == MessageStatus.burned) {
         merged.remove(message.id);
         await database.markBurned(message.id);
@@ -245,10 +285,10 @@ class ChatProvider extends ChangeNotifier {
       merged[message.id] = message;
       await database.upsertMessage(message);
     }
-    _messagesByConversation[_key(toType, peerId)] = _sorted(merged.values);
-    _unreadCounts[_key(toType, peerId)] = 0;
+    _messagesByConversation[conversationKey] = _sorted(merged.values);
+    _unreadCounts[conversationKey] = 0;
     await _sendReadReceipts(
-      _messagesByConversation[_key(toType, peerId)] ?? const [],
+      _messagesByConversation[conversationKey] ?? const [],
     );
     _isLoading = false;
     notifyListeners();
@@ -268,15 +308,20 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> sendVoice(String peerId, VoiceMessagePayload payload) async {
+    final effectiveBurnAfter =
+        _burnAfterByConversation[_key(ConversationType.user, peerId)];
+    final content = effectiveBurnAfter == null
+        ? jsonEncode(payload.toJson())
+        : jsonEncode({'kind': 'voice', ...payload.toJson()});
     final message = Message(
       id: _uuid.v4(),
       fromId: _currentUserId,
       toId: peerId,
       toType: ConversationType.user,
-      type: MessageType.voice,
-      content: jsonEncode(payload.toJson()),
+      type: effectiveBurnAfter == null ? MessageType.voice : MessageType.burn,
+      content: content,
       timestamp: DateTime.now().toUtc(),
-      burnAfter: _burnAfterByConversation[_key(ConversationType.user, peerId)],
+      burnAfter: effectiveBurnAfter,
       status: MessageStatus.sent,
     );
     await _upsertLocal(message);
@@ -326,7 +371,12 @@ class ChatProvider extends ChangeNotifier {
         await _upsertLocal(message);
         if (message.fromId != _currentUserId) {
           final key = _key(message.toType, _conversationPeer(message));
-          _unreadCounts[key] = (_unreadCounts[key] ?? 0) + 1;
+          if (key == _activeConversationKey) {
+            _unreadCounts[key] = 0;
+            await _sendReadReceipt(message);
+          } else {
+            _unreadCounts[key] = (_unreadCounts[key] ?? 0) + 1;
+          }
           notifyListeners();
         }
       case 'message.delivered':
@@ -431,13 +481,25 @@ class ChatProvider extends ChangeNotifier {
           message.status == MessageStatus.revoked) {
         continue;
       }
-      _webSocketService.send(
-        WebSocketEvent(
-          type: 'message.read',
-          payload: {'messageId': message.id},
-        ),
-      );
+      _webSocketService.send(_readEvent(message.id));
     }
+  }
+
+  Future<void> _sendReadReceipt(Message message) async {
+    if (message.fromId == _currentUserId ||
+        message.status == MessageStatus.read ||
+        message.status == MessageStatus.burned ||
+        message.status == MessageStatus.revoked) {
+      return;
+    }
+    _webSocketService.send(_readEvent(message.id));
+  }
+
+  WebSocketEvent _readEvent(String messageId) {
+    return WebSocketEvent(
+      type: 'message.read',
+      payload: {'messageId': messageId},
+    );
   }
 
   void _handleBurnSetting(Map<String, dynamic> payload) {
@@ -468,8 +530,11 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> markBurned(String messageId) {
-    return _updateStatus(messageId, MessageStatus.burned);
+  Future<void> markBurned(String messageId) async {
+    await _updateStatus(messageId, MessageStatus.burned);
+    _webSocketService.send(
+      WebSocketEvent(type: 'message.burned', payload: {'messageId': messageId}),
+    );
   }
 
   String _conversationPeer(Message message) {

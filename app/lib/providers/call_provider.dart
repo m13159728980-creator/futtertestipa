@@ -66,33 +66,50 @@ class CallProvider extends ChangeNotifier {
   StreamSubscription<WebSocketEvent>? _subscription;
 
   CallSession? _session;
+  final List<Map<String, dynamic>> _pendingSdp = [];
+  final List<Map<String, dynamic>> _pendingIce = [];
   bool _isMicMuted = false;
   bool _isSpeakerOn = false;
   bool _isCameraOff = false;
+  bool _isVideoCall = false;
 
   CallSession? get session => _session;
   bool get isMicMuted => _isMicMuted;
   bool get isSpeakerOn => _isSpeakerOn;
   bool get isCameraOff => _isCameraOff;
+  bool get isVideoCall => _isVideoCall;
 
   Future<void> startOneToOneCall({
     required String peerId,
     required String peerName,
+    bool video = false,
   }) async {
-    await _startCall(peerIds: [peerId], title: peerName, isGroup: false);
+    await _startCall(
+      peerIds: [peerId],
+      title: peerName,
+      isGroup: false,
+      video: video,
+    );
   }
 
   Future<void> startGroupCall({
     required List<String> peerIds,
     required String groupName,
+    bool video = false,
   }) async {
-    await _startCall(peerIds: peerIds, title: groupName, isGroup: true);
+    await _startCall(
+      peerIds: peerIds,
+      title: groupName,
+      isGroup: true,
+      video: video,
+    );
   }
 
   Future<void> _startCall({
     required List<String> peerIds,
     required String title,
     required bool isGroup,
+    required bool video,
   }) async {
     final participantIds = [_currentUserId, ...peerIds];
     if (participantIds.length > maxParticipants) {
@@ -110,7 +127,9 @@ class CallProvider extends ChangeNotifier {
       title: title,
       peerId: isGroup ? null : peerIds.first,
     );
-    await _webRtcService.startLocalMedia(video: true);
+    _isVideoCall = video;
+    _isCameraOff = !video;
+    await _webRtcService.startLocalMedia(video: video);
     await _ensurePeerConnections(peerIds);
     _signalingService.send(
       WebSocketEvent(
@@ -119,6 +138,8 @@ class CallProvider extends ChangeNotifier {
           'callId': callId,
           'participantIds': peerIds,
           'isGroup': isGroup,
+          'video': video,
+          'title': title,
         },
       ),
     );
@@ -135,7 +156,7 @@ class CallProvider extends ChangeNotifier {
     if (current == null) {
       return;
     }
-    await _webRtcService.startLocalMedia(video: true);
+    await _webRtcService.startLocalMedia(video: _isVideoCall);
     await _ensurePeerConnections(
       current.participantIds.where((id) => id != _currentUserId),
     );
@@ -150,6 +171,7 @@ class CallProvider extends ChangeNotifier {
     _signalingService.send(
       WebSocketEvent(type: 'call.accept', payload: {'callId': current.id}),
     );
+    await _flushPendingSignaling();
     notifyListeners();
   }
 
@@ -170,6 +192,8 @@ class CallProvider extends ChangeNotifier {
       WebSocketEvent(type: type, payload: {'callId': current.id}),
     );
     _session = current.copyWith(state: state);
+    _pendingSdp.clear();
+    _pendingIce.clear();
     await _webRtcService.cleanup();
     notifyListeners();
   }
@@ -227,6 +251,8 @@ class CallProvider extends ChangeNotifier {
       title: payload['title']?.toString() ?? fromId,
       peerId: fromId,
     );
+    _isVideoCall = payload['video'] == true;
+    _isCameraOff = !_isVideoCall;
     notifyListeners();
   }
 
@@ -253,6 +279,10 @@ class CallProvider extends ChangeNotifier {
   }
 
   Future<void> _handleSdp(Map<String, dynamic> payload) async {
+    if (_session?.state == CallState.incoming) {
+      _pendingSdp.add(Map<String, dynamic>.from(payload));
+      return;
+    }
     final fromId = payload['fromId']?.toString();
     final description = _map(payload['description']);
     if (fromId == null || description == null) {
@@ -272,12 +302,29 @@ class CallProvider extends ChangeNotifier {
   }
 
   Future<void> _handleIce(Map<String, dynamic> payload) async {
+    if (_session?.state == CallState.incoming) {
+      _pendingIce.add(Map<String, dynamic>.from(payload));
+      return;
+    }
     final fromId = payload['fromId']?.toString();
     final candidate = _map(payload['candidate']);
     if (fromId == null || candidate == null) {
       return;
     }
     await _webRtcService.addIceCandidate(fromId, candidate);
+  }
+
+  Future<void> _flushPendingSignaling() async {
+    final pendingSdp = [..._pendingSdp];
+    final pendingIce = [..._pendingIce];
+    _pendingSdp.clear();
+    _pendingIce.clear();
+    for (final payload in pendingSdp) {
+      await _handleSdp(payload);
+    }
+    for (final payload in pendingIce) {
+      await _handleIce(payload);
+    }
   }
 
   Future<void> _ensurePeerConnections(Iterable<String> peerIds) async {

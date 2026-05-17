@@ -33,8 +33,8 @@ function createApp(options = {}) {
   app.use(healthRoutes);
   app.use(createAuthRoutes({ authMiddleware, userService }));
   app.use(createUserRoutes({ authMiddleware, userService }));
-  app.use(createContactRoutes({ authMiddleware, groupService }));
-  app.use(createGroupRoutes({ authMiddleware, groupService }));
+  app.use(createContactRoutes({ authMiddleware, groupService, notifier: options.notifier }));
+  app.use(createGroupRoutes({ authMiddleware, groupService, notifier: options.notifier }));
   app.use(createMessageRoutes({ authMiddleware, messageService }));
   app.use(createMediaRoutes({ authMiddleware, mediaService, storagePath: options.storagePath }));
   app.use(createStickerRoutes(options));
@@ -46,12 +46,13 @@ if (require.main === module) {
   const userService = createUserService();
   const pushService = createPushService();
   const messageService = createMessageService({ pushService });
-  const app = createApp({ userService, messageService });
   const wsHttpServer = http.createServer();
   const socketServer = createSocketServer({ server: wsHttpServer, messageService, userService });
+  const notifier = (targets, type, payload) => socketServer.broadcast(targets, type, payload);
+  const app = createApp({ userService, messageService, notifier });
   const burnCleanupJob = createBurnCleanupJob({
     messageService,
-    notifier: (targets, type, payload) => socketServer.broadcast(targets, type, payload)
+    notifier
   });
 
   app.listen(config.apiPort, () => {

@@ -57,7 +57,7 @@ void main() {
         'payload': {'token': 'token-1'},
       },
     ]);
-    expect(find.text('Telegram'), findsOneWidget);
+    expect(find.text('PrvChat'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 
@@ -84,13 +84,157 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Bob'), findsOneWidget);
+    expect(find.text('Bob'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
 
     expect(find.text('添加好友'), findsOneWidget);
     expect(find.text('创建群聊'), findsOneWidget);
+  });
+
+  testWidgets('chat list unread marker is a compact dot without count text', (
+    WidgetTester tester,
+  ) async {
+    final user = _user(token: 'token-1');
+    final storage = InMemorySecureStorage();
+    await storage.saveSession(user);
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    addTearDown(webSocketService.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        apiService: _OfflineApiService(user, [
+          const User(
+            id: '2',
+            displayName: 'Bob',
+            account: '2222222222',
+            token: 'token-1',
+            avatarIndex: 1,
+          ),
+        ]),
+        secureStorageService: storage,
+        webSocketService: webSocketService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    socket.addIncoming(
+      WebSocketEvent(
+        type: 'message.created',
+        payload: {
+          'message': Message(
+            id: 'm-unread',
+            fromId: '2',
+            toId: 'me',
+            toType: ConversationType.user,
+            type: MessageType.text,
+            content: 'hello',
+            timestamp: DateTime.utc(2026, 5, 10, 1, 2),
+            status: MessageStatus.sent,
+          ).toJson(),
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final unreadDot = tester.widget<SizedBox>(
+      find.byKey(const Key('chat-list-unread-dot')),
+    );
+    expect(unreadDot.width, 10);
+    expect(unreadDot.height, 10);
+    expect(find.text('1'), findsNothing);
+  });
+
+  testWidgets('chat list shows burn voice messages as voice preview', (
+    WidgetTester tester,
+  ) async {
+    final user = _user(token: 'token-1');
+    final storage = InMemorySecureStorage();
+    await storage.saveSession(user);
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    addTearDown(webSocketService.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        apiService: _OfflineApiService(user, [
+          const User(
+            id: '2',
+            displayName: 'Bob',
+            account: '2222222222',
+            token: 'token-1',
+            avatarIndex: 1,
+          ),
+        ]),
+        secureStorageService: storage,
+        webSocketService: webSocketService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    socket.addIncoming(
+      WebSocketEvent(
+        type: 'message.created',
+        payload: {
+          'message': Message(
+            id: 'm-burn-voice',
+            fromId: '2',
+            toId: 'me',
+            toType: ConversationType.user,
+            type: MessageType.burn,
+            content:
+                '{"kind":"voice","url":"/media/voice-1.m4a","durationMs":3000}',
+            timestamp: DateTime.utc(2026, 5, 10, 1, 2),
+            burnAfter: const Duration(seconds: 10),
+            status: MessageStatus.sent,
+          ).toJson(),
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('语音消息'), findsOneWidget);
+    expect(find.textContaining('/media/voice-1.m4a'), findsNothing);
+  });
+
+  testWidgets('incoming call opens the call screen automatically', (
+    WidgetTester tester,
+  ) async {
+    final user = _user(token: 'token-1');
+    final storage = InMemorySecureStorage();
+    await storage.saveSession(user);
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    addTearDown(webSocketService.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        apiService: _OfflineApiService(user),
+        secureStorageService: storage,
+        webSocketService: webSocketService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    socket.addIncoming(
+      const WebSocketEvent(
+        type: 'call.invite',
+        payload: {
+          'callId': 'call-1',
+          'fromId': '2',
+          'participantIds': ['1', '2'],
+          'isGroup': false,
+          'title': 'Bob',
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob'), findsAtLeastNWidgets(1));
+    expect(find.text('接听'), findsOneWidget);
+    expect(find.text('拒绝'), findsOneWidget);
   });
 
   testWidgets('unauthenticated shell does not start the chat websocket', (
@@ -158,6 +302,9 @@ class _OfflineApiService implements ApiService {
 
   @override
   Future<List<User>> listContacts({required String token}) async => contacts;
+
+  @override
+  Future<List<Group>> listGroups({required String token}) async => const [];
 
   @override
   Future<User> addContact({required String token, required String account}) {
@@ -231,6 +378,10 @@ class _FakeWebSocketChannel implements WebSocketChannel {
   List<Map<String, dynamic>> get sentJson => _sink.sent
       .map((source) => jsonDecode(source) as Map<String, dynamic>)
       .toList();
+
+  void addIncoming(WebSocketEvent event) {
+    _incoming.add(jsonEncode(event.toJson()));
+  }
 
   @override
   int? get closeCode => null;

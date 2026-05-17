@@ -702,6 +702,13 @@ async function createMessage(fromId, input) {
     return results;
   }
 
+  async function markBurned(messageId, userId) {
+    const existing = await requireActiveMessage(messageId);
+    await requireParticipant(existing, userId);
+    const message = await repository.markBurned(messageId, now());
+    return { message, targets: await targetsFor(message) };
+  }
+
   async function syncMessages(userId) {
     return repository.syncMessagesForUser(Number(userId), new Date(now().getTime() - SYNC_WINDOW_MS));
   }
@@ -710,6 +717,7 @@ async function createMessage(fromId, input) {
     createMessage,
     expireBurnedMessages,
     getPrivateBurnSetting,
+    markBurned,
     markDelivered,
     markRead,
     revokeMessage,

@@ -7,6 +7,7 @@ import 'package:app/models/message.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/call_provider.dart';
 import 'package:app/providers/chat_provider.dart';
+import 'package:app/providers/social_provider.dart';
 import 'package:app/screens/call_screen.dart';
 import 'package:app/widgets/burn_mode_menu.dart';
 import 'package:app/widgets/chat_bubble.dart';
@@ -44,6 +45,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    ref
+        .read(chatProvider)
+        .closeConversation(
+          toType: ConversationType.user,
+          peerId: widget.peerId,
+        );
     unawaited(_secureWindowService.disable());
     unawaited(_voiceRecordingService.dispose());
     super.dispose();
@@ -58,8 +65,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final chat = ref.watch(chatProvider);
     final currentUserId = ref.watch(authProvider).user?.id ?? '';
+    final social = ref.watch(socialProvider);
     final messages = chat.messagesFor(widget.peerId);
     final burnAfter = chat.burnAfterFor(widget.peerId);
+    final isOnline = social.isOnline(widget.peerId);
 
     return Scaffold(
       appBar: AppBar(
@@ -79,7 +88,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    burnAfter == null ? '在线' : '阅后即焚 ${burnAfter.inSeconds} 秒',
+                    burnAfter == null
+                        ? (isOnline ? '在线' : '')
+                        : '阅后即焚 ${burnAfter.inSeconds} 秒',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ],
@@ -89,7 +100,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Start call',
+            tooltip: '通话',
             onPressed: () async {
               await ref
                   .read(callProvider)
@@ -134,23 +145,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final recording = await _voiceRecordingService.stop();
       _mediaService.validateVoiceDuration(recording.duration);
       final token = ref.read(authProvider).user?.token;
-      final remotePath = await _mediaService.upload(recording.file, token: token);
-      await ref.read(chatProvider).sendVoice(
-        widget.peerId,
-        VoiceMessagePayload(
-          url: remotePath,
-          localPath: recording.file.path,
-          duration: recording.duration,
-          sizeBytes: await recording.file.length(),
-        ),
+      final remotePath = await _mediaService.upload(
+        recording.file,
+        token: token,
       );
+      await ref
+          .read(chatProvider)
+          .sendVoice(
+            widget.peerId,
+            VoiceMessagePayload(
+              url: remotePath,
+              localPath: recording.file.path,
+              duration: recording.duration,
+              sizeBytes: await recording.file.length(),
+            ),
+          );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('语音发送失败: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('语音发送失败: $error')));
     }
   }
 }

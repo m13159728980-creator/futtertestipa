@@ -55,7 +55,8 @@ class GroupProvider extends ChangeNotifier {
         id: socialGroup.id,
         name: socialGroup.name,
         memberNames: {
-          for (final member in socialGroup.members) member.userId: member.displayName,
+          for (final member in socialGroup.members)
+            member.userId: member.displayName,
         },
       );
     }
@@ -73,6 +74,10 @@ class GroupProvider extends ChangeNotifier {
       toType: ConversationType.group,
       peerId: groupId,
     );
+  }
+
+  void closeMessages(String groupId) {
+    _chat.closeConversation(toType: ConversationType.group, peerId: groupId);
   }
 
   Future<void> sendText(String groupId, String text, {Duration? burnAfter}) {

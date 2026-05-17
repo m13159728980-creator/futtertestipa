@@ -25,6 +25,8 @@ abstract interface class ApiService {
 
   Future<List<User>> listContacts({required String token});
 
+  Future<List<Group>> listGroups({required String token});
+
   Future<User> addContact({required String token, required String account});
 
   Future<Group> createGroup({
@@ -157,6 +159,22 @@ class HttpApiService implements ApiService {
     return [
       for (final item in (body['contacts'] as List? ?? const []))
         if (item is Map<String, dynamic>) User.fromJson(item, token: token),
+    ];
+  }
+
+  @override
+  Future<List<Group>> listGroups({required String token}) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/groups'),
+      headers: _jsonHeaders(token: token),
+    );
+    final body = _decode(response);
+    if (response.statusCode != 200) {
+      throw ApiException(_message(body));
+    }
+    return [
+      for (final item in (body['groups'] as List? ?? const []))
+        if (item is Map<String, dynamic>) Group.fromJson(item),
     ];
   }
 

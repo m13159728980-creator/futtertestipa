@@ -359,6 +359,108 @@ void main() {
   );
 
   test(
+    'incoming messages for the open conversation are marked read immediately',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+
+      await provider.loadMessages('alice');
+      socket.clearSent();
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.created',
+          payload: {
+            'message': _message(
+              id: 'open-incoming',
+              fromId: 'alice',
+              toId: 'me',
+            ).toJson(),
+          },
+        ),
+      );
+
+      expect(provider.unreadCountFor('alice'), 0);
+      expect(
+        socket.sentJson,
+        anyElement(
+          predicate<Map<String, dynamic>>(
+            (event) =>
+                event['type'] == 'message.read' &&
+                (event['payload'] as Map)['messageId'] == 'open-incoming',
+          ),
+        ),
+      );
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
+
+  test(
+    'incoming messages are unread after the conversation is closed',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+
+      await provider.loadMessages('alice');
+      provider.closeConversation(
+        toType: ConversationType.user,
+        peerId: 'alice',
+      );
+      socket.clearSent();
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.created',
+          payload: {
+            'message': _message(
+              id: 'closed-incoming',
+              fromId: 'alice',
+              toId: 'me',
+            ).toJson(),
+          },
+        ),
+      );
+
+      expect(provider.unreadCountFor('alice'), 1);
+      expect(
+        socket.sentJson.where(
+          (event) =>
+              event['type'] == 'message.read' &&
+              (event['payload'] as Map)['messageId'] == 'closed-incoming',
+        ),
+        isEmpty,
+      );
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
+
+  test(
     'server echo with same message id replaces the local sent message instead of duplicating it',
     () async {
       final database = LocalDatabaseService(
@@ -522,6 +624,50 @@ void main() {
     },
   );
 
+  test('local burn expiry notifies the server so messages stay burned', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+    );
+    await provider.handleEvent(
+      WebSocketEvent(
+        type: 'message.send',
+        payload: {
+          'message': _message(
+            id: 'local-burned-message',
+            fromId: 'alice',
+            toId: 'me',
+            content: 'secret',
+          ).toJson(),
+        },
+      ),
+    );
+    socket.clearSent();
+
+    await provider.markBurned('local-burned-message');
+
+    expect(provider.messagesFor('alice'), isEmpty);
+    expect(socket.sentJson, [
+      {
+        'type': 'message.burned',
+        'payload': {'messageId': 'local-burned-message'},
+      },
+    ]);
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
   test('sync does not resurrect remotely burned messages', () async {
     final database = LocalDatabaseService(
       cryptoService: CryptoService(CryptoService.generateKey()),
@@ -567,6 +713,55 @@ void main() {
     await provider.loadMessages('peer');
 
     expect(provider.messagesFor('peer'), isEmpty);
+  });
+
+  test('sync does not resurrect a locally burned message awaiting server echo', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final remote = _StaticMessageSyncService();
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: remote,
+      webSocketService: WebSocketService(
+        connector: (_) => throw StateError('unused'),
+      ),
+    );
+    await database.open();
+    await database.upsertMessage(
+      Message(
+        id: 'local-burn-tombstone',
+        fromId: 'peer',
+        toId: 'me',
+        toType: ConversationType.user,
+        type: MessageType.burn,
+        content: 'gone',
+        timestamp: DateTime.utc(2026, 5, 10),
+        burnAfter: const Duration(seconds: 5),
+        status: MessageStatus.burned,
+      ),
+    );
+    remote.messages = [
+      Message(
+        id: 'local-burn-tombstone',
+        fromId: 'peer',
+        toId: 'me',
+        toType: ConversationType.user,
+        type: MessageType.burn,
+        content: 'gone',
+        timestamp: DateTime.utc(2026, 5, 10),
+        burnAfter: const Duration(seconds: 5),
+        status: MessageStatus.read,
+      ),
+    ];
+
+    await provider.loadMessages('peer');
+
+    expect(provider.messagesFor('peer'), isEmpty);
+    provider.dispose();
+    await database.close();
   });
 
   test(
@@ -675,6 +870,11 @@ class _FakeApiService implements ApiService {
   }
 
   @override
+  Future<List<Group>> listGroups({required String token}) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<User> addContact({required String token, required String account}) {
     throw UnimplementedError();
   }
@@ -746,6 +946,10 @@ class _FakeWebSocketChannel implements WebSocketChannel {
   List<Map<String, dynamic>> get sentJson => _sink.sent
       .map((source) => jsonDecode(source) as Map<String, dynamic>)
       .toList();
+
+  void clearSent() {
+    _sink.sent.clear();
+  }
 
   @override
   int? get closeCode => null;

@@ -141,6 +141,16 @@ function createMemoryGroupRepository(userRepository) {
       const users = await Promise.all(rows.map((contact) => userRepository.findActiveById(contact.contactId)));
       return users.filter(Boolean);
     },
+    async listGroups(userId) {
+      const groupIds = members
+        .filter((member) => member.userId === Number(userId) && !member.removedAt)
+        .map((member) => member.groupId);
+      return Promise.all(
+        groups
+          .filter((group) => groupIds.includes(group.id) && !group.deletedAt)
+          .map(groupWithMembers)
+      );
+    },
     async groupCodeExists(groupCode) {
       return groups.some((group) => group.groupCode === groupCode);
     },
@@ -301,6 +311,22 @@ function createPostgresGroupRepository(query = db.query, transaction = db.transa
       );
       return rows.map(mapUser);
     },
+    async listGroups(userId) {
+      const { rows } = await query(
+        `
+          SELECT g.id, g.group_code, g.name, g.owner_id, g.burn_enabled
+          FROM groups g
+          JOIN group_members gm
+            ON gm.group_id = g.id
+           AND gm.user_id = $1
+           AND gm.removed_at IS NULL
+          WHERE g.deleted_at IS NULL
+          ORDER BY gm.joined_at DESC, g.id DESC
+        `,
+        [userId]
+      );
+      return Promise.all(rows.map(hydrateGroup));
+    },
     async groupCodeExists(groupCode) {
       const { rows } = await query('SELECT 1 FROM groups WHERE group_code = $1 LIMIT 1', [groupCode]);
       return rows.length > 0;
@@ -451,6 +477,11 @@ function createGroupService(options = {}) {
     return contacts.map(serializeContact);
   }
 
+  async function listGroups(userId) {
+    const groups = await repository.listGroups(userId);
+    return groups.map(mapGroup);
+  }
+
   async function createGroup(userId, { name, memberIds }) {
     const selectedIds = uniqueMemberIds(userId, memberIds);
     if (selectedIds.length < 2) {
@@ -567,6 +598,7 @@ function createGroupService(options = {}) {
     createGroup,
     getGroup,
     listContacts,
+    listGroups,
     removeMember,
     renameGroup,
     setMemberRole

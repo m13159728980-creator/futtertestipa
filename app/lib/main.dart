@@ -5,8 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/themes/app_theme.dart';
 import 'core/services/push_notification_service.dart';
 import 'providers/auth_provider.dart';
+import 'providers/call_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/settings_provider.dart';
+import 'models/call_session.dart';
+import 'screens/call_screen.dart';
 import 'screens/chat_list_screen.dart';
 import 'screens/create_account_screen.dart';
 
@@ -56,16 +59,44 @@ class PrivateChatShell extends ConsumerWidget {
   }
 }
 
-class AuthenticatedChatShell extends ConsumerWidget {
+class AuthenticatedChatShell extends ConsumerStatefulWidget {
   const AuthenticatedChatShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthenticatedChatShell> createState() =>
+      _AuthenticatedChatShellState();
+}
+
+class _AuthenticatedChatShellState
+    extends ConsumerState<AuthenticatedChatShell> {
+  bool _showingIncomingCall = false;
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(chatProvider);
     ref.listen(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
         ref.read(pushNotificationServiceProvider).initialize();
       }
+    });
+    ref.listen(callProvider, (previous, next) {
+      final session = next.session;
+      if (session?.state != CallState.incoming || _showingIncomingCall) {
+        return;
+      }
+      _showingIncomingCall = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          _showingIncomingCall = false;
+          return;
+        }
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const CallScreen()));
+        if (mounted) {
+          _showingIncomingCall = false;
+        }
+      });
     });
     return const ChatListScreen();
   }

@@ -137,6 +137,27 @@ test('POST /api/groups returns a generated groupCode with exactly 8 digits', asy
   ]));
 });
 
+test('GET /api/groups lists groups for the authenticated member', async () => {
+  const app = createTestApp();
+  const owner = await register(app, '@OWNER', 'Owner');
+  const first = await register(app, '@FIRST', 'First');
+  const second = await register(app, '@SECOND', 'Second');
+  const outsider = await register(app, '@OUTSIDER', 'Outsider');
+  const group = await createGroup(app, owner.token, [first.user.id, second.user.id]);
+
+  const memberRes = await request(app)
+    .get('/api/groups')
+    .set('Authorization', `Bearer ${first.token}`);
+  const outsiderRes = await request(app)
+    .get('/api/groups')
+    .set('Authorization', `Bearer ${outsider.token}`);
+
+  expect(memberRes.status).toBe(200);
+  expect(memberRes.body.groups).toEqual([group]);
+  expect(outsiderRes.status).toBe(200);
+  expect(outsiderRes.body.groups).toEqual([]);
+});
+
 test('PATCH /api/groups/:id allows the owner to rename a group', async () => {
   const app = createTestApp();
   const owner = await register(app, '@OWNER', 'Owner');

@@ -36,9 +36,17 @@ function createSocketServer({ server, messageService, userService, authenticateT
   }
 
   function removeSocket(socket) {
-    for (const sockets of socketsByUserId.values()) {
-      sockets.delete(socket);
+    const offlineUserIds = [];
+    for (const [userId, sockets] of socketsByUserId.entries()) {
+      if (!sockets.delete(socket)) {
+        continue;
+      }
+      if (sockets.size === 0) {
+        socketsByUserId.delete(userId);
+        offlineUserIds.push(userId);
+      }
     }
+    return offlineUserIds;
   }
 
   function broadcast(targets, type, payload) {
@@ -53,6 +61,21 @@ function createSocketServer({ server, messageService, userService, authenticateT
   function isUserOnline(userId) {
     const sockets = socketsByUserId.get(Number(userId));
     return Boolean(sockets && sockets.size > 0);
+  }
+
+  function onlineUserIds({ except } = {}) {
+    const excluded = Number(except);
+    return Array.from(socketsByUserId.keys())
+      .filter((userId) => userId !== excluded)
+      .sort((left, right) => left - right);
+  }
+
+  function broadcastPresence(userId, isOnline) {
+    broadcast(
+      onlineUserIds({ except: userId }),
+      'presence.updated',
+      { userId: Number(userId), isOnline: Boolean(isOnline) }
+    );
   }
 
   const callSignaling = createCallSignaling({ broadcast, isUserOnline });
@@ -84,6 +107,11 @@ function createSocketServer({ server, messageService, userService, authenticateT
     if (event.type === 'message.burn.start') {
       const result = await messageService.startBurn(event.messageId || event.payload?.messageId, userId);
       broadcast(result.targets, 'message.burn.start', clientPayload(result));
+      return;
+    }
+    if (event.type === 'message.burned') {
+      const result = await messageService.markBurned(event.messageId || event.payload?.messageId, userId);
+      broadcast(result.targets, 'message.burned', clientPayload(result));
       return;
     }
     if (event.type === 'conversation.burn.set') {
@@ -124,8 +152,15 @@ function createSocketServer({ server, messageService, userService, authenticateT
             return socket.close(4401);
           }
           userId = Number(user.id);
+          const wasOnline = isUserOnline(userId);
+          const snapshot = onlineUserIds({ except: userId });
           addSocket(userId, socket);
-          return send(socket, 'auth:ok', { userId });
+          send(socket, 'auth:ok', { userId });
+          send(socket, 'presence.snapshot', { onlineUserIds: snapshot });
+          if (!wasOnline) {
+            broadcastPresence(userId, true);
+          }
+          return;
         }
 
         return await handleAuthedEvent(socket, userId, event);
@@ -135,7 +170,9 @@ function createSocketServer({ server, messageService, userService, authenticateT
     });
 
     socket.on('close', () => {
-      removeSocket(socket);
+      for (const offlineUserId of removeSocket(socket)) {
+        broadcastPresence(offlineUserId, false);
+      }
     });
   }
 

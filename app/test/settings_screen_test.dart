@@ -11,6 +11,7 @@ import 'package:app/providers/chat_provider.dart';
 import 'package:app/providers/settings_provider.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,16 +28,57 @@ void main() {
     expect(find.text('设置'), findsOneWidget);
     expect(find.text('语言'), findsOneWidget);
     expect(find.text('中文'), findsOneWidget);
+    expect(find.byType(SegmentedButton<String>), findsNothing);
 
-    await tester.tap(find.text('English'));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-language-tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English').last);
+    await tester.pumpAndSettle();
 
     expect(settings.settings.languageCode, 'en');
 
-    await tester.tap(find.text('中文'));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-language-tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('中文').last);
+    await tester.pumpAndSettle();
 
     expect(settings.settings.languageCode, 'zh');
+  });
+
+  testWidgets('profile header copies own numeric ID', (tester) async {
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardText = (call.arguments as Map?)?['text']?.toString();
+            return null;
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    final storage = InMemorySecureStorage();
+    await storage.saveSession(_testUser);
+    final auth = AuthProvider(
+      apiService: _FakeApiService(),
+      storageService: storage,
+    );
+    await auth.initialize();
+    final settings = SettingsProvider(
+      storage: InMemorySettingsStorage(),
+      secureWindowService: _FakeSecureWindowService(),
+    );
+    await tester.pumpWidget(
+      _testApp(settingsNotifier: settings, authNotifier: auth),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('settings-copy-id')));
+    await tester.pumpAndSettle();
+
+    expect(clipboardText, '1000000001');
+    expect(find.text('ID 已复制'), findsOneWidget);
   });
 
   testWidgets('avatar selection is limited to fixed avatars 0 through 8', (
@@ -79,83 +121,84 @@ void main() {
     expect(settings.settings.disableScreenshots, isTrue);
   });
 
-  testWidgets('account deletion clears local cache and resets settings after exact confirmation', (
-    tester,
-  ) async {
-    _useTallTestViewport(tester);
-    final api = _FakeApiService();
-    final storage = InMemorySecureStorage();
-    final settingsStorage = InMemorySettingsStorage();
-    final cacheService = _FakeCacheService();
-    final database = LocalDatabaseService(
-      cryptoService: CryptoService(CryptoService.generateKey()),
-      store: InMemoryMessageStore(),
-    );
-    await database.open();
-    await database.upsertMessage(_message(id: 'm1'));
-    await storage.saveSession(_testUser);
-    final auth = AuthProvider(apiService: api, storageService: storage);
-    await auth.initialize();
-    final settings = SettingsProvider(
-      storage: settingsStorage,
-      cacheService: cacheService,
-      secureWindowService: _FakeSecureWindowService(),
-    );
-    await settings.setLanguage('en');
-    await settings.setMessageNotifications(false);
-    await tester.pumpWidget(
-      _testApp(
-        settingsNotifier: settings,
-        authNotifier: auth,
-        database: database,
-      ),
-    );
+  testWidgets(
+    'account deletion clears local cache and resets settings after exact confirmation',
+    (tester) async {
+      _useTallTestViewport(tester);
+      final api = _FakeApiService();
+      final storage = InMemorySecureStorage();
+      final settingsStorage = InMemorySettingsStorage();
+      final cacheService = _FakeCacheService();
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      await database.open();
+      await database.upsertMessage(_message(id: 'm1'));
+      await storage.saveSession(_testUser);
+      final auth = AuthProvider(apiService: api, storageService: storage);
+      await auth.initialize();
+      final settings = SettingsProvider(
+        storage: settingsStorage,
+        cacheService: cacheService,
+        secureWindowService: _FakeSecureWindowService(),
+      );
+      await settings.setLanguage('en');
+      await settings.setMessageNotifications(false);
+      await tester.pumpWidget(
+        _testApp(
+          settingsNotifier: settings,
+          authNotifier: auth,
+          database: database,
+        ),
+      );
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('delete-account-tile')),
-      160,
-    );
-    await tester.drag(find.byType(ListView), const Offset(0, -80));
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('delete-account-tile')));
-    await tester.pumpAndSettle();
-    expect(find.text('注销账号'), findsAtLeastNWidgets(1));
-    await tester.tap(find.text('继续注销'));
-    await tester.pumpAndSettle();
-    expect(find.text('确认注销'), findsAtLeastNWidgets(1));
-    await tester.enterText(
-      find.byKey(const ValueKey('delete-account-confirmation')),
-      '@wrong',
-    );
-    await tester.tap(find.widgetWithText(FilledButton, '确认注销'));
-    await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('delete-account-tile')),
+        160,
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -80));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('delete-account-tile')));
+      await tester.pumpAndSettle();
+      expect(find.text('注销账号'), findsAtLeastNWidgets(1));
+      await tester.tap(find.text('继续注销'));
+      await tester.pumpAndSettle();
+      expect(find.text('确认注销'), findsAtLeastNWidgets(1));
+      await tester.enterText(
+        find.byKey(const ValueKey('delete-account-confirmation')),
+        '@wrong',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, '确认注销'));
+      await tester.pumpAndSettle();
 
-    expect(api.deleteAccountCalls, isEmpty);
-    expect(find.text('ID不匹配'), findsOneWidget);
+      expect(api.deleteAccountCalls, isEmpty);
+      expect(find.text('ID不匹配'), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('delete-account-confirmation')),
-      '1000000001',
-    );
-    await tester.tap(find.widgetWithText(FilledButton, '确认注销'));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('delete-account-confirmation')),
+        '1000000001',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, '确认注销'));
+      await tester.pumpAndSettle();
 
-    expect(api.deleteAccountCalls, ['1000000001']);
-    expect(auth.status, AuthStatus.unauthenticated);
-    expect(await storage.readToken(), isNull);
-    expect(cacheService.clearCacheCalls, 1);
-    expect(settingsStorage.clearSettingsCalls, 1);
-    expect(settings.settings.languageCode, 'zh');
-    expect(settings.settings.messageNotifications, isTrue);
-    expect(
-      await database.listMessages(
-        toType: ConversationType.user,
-        peerId: 'bob',
-        currentUserId: 'alice',
-      ),
-      isEmpty,
-    );
-  });
+      expect(api.deleteAccountCalls, ['1000000001']);
+      expect(auth.status, AuthStatus.unauthenticated);
+      expect(await storage.readToken(), isNull);
+      expect(cacheService.clearCacheCalls, 1);
+      expect(settingsStorage.clearSettingsCalls, 1);
+      expect(settings.settings.languageCode, 'zh');
+      expect(settings.settings.messageNotifications, isTrue);
+      expect(
+        await database.listMessages(
+          toType: ConversationType.user,
+          peerId: 'bob',
+          currentUserId: 'alice',
+        ),
+        isEmpty,
+      );
+    },
+  );
 }
 
 void _useTallTestViewport(WidgetTester tester) {
@@ -175,9 +218,12 @@ Widget _testApp({
   return ProviderScope(
     overrides: [
       settingsProvider.overrideWith((ref) => settingsNotifier),
-      if (authNotifier != null) authProvider.overrideWith((ref) => authNotifier),
+      if (authNotifier != null)
+        authProvider.overrideWith((ref) => authNotifier),
       if (database != null)
-        localDatabaseServiceProvider.overrideWith((ref) => Future.value(database)),
+        localDatabaseServiceProvider.overrideWith(
+          (ref) => Future.value(database),
+        ),
     ],
     child: const MaterialApp(home: SettingsScreen()),
   );
@@ -252,6 +298,9 @@ class _FakeApiService implements ApiService {
 
   @override
   Future<List<User>> listContacts({required String token}) async => const [];
+
+  @override
+  Future<List<Group>> listGroups({required String token}) async => const [];
 
   @override
   Future<User> addContact({required String token, required String account}) {

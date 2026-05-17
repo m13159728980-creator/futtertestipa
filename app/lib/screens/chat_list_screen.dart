@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:app/core/services/api_service.dart';
-import 'package:app/models/user.dart';
-import 'package:app/providers/auth_provider.dart';
+import 'package:app/models/message.dart';
 import 'package:app/providers/chat_provider.dart';
 import 'package:app/providers/social_provider.dart';
 import 'package:app/screens/chat_screen.dart';
@@ -8,7 +9,6 @@ import 'package:app/screens/group_screen.dart';
 import 'package:app/screens/settings_screen.dart';
 import 'package:app/widgets/default_avatar.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatListScreen extends ConsumerWidget {
@@ -16,14 +16,13 @@ class ChatListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
     final social = ref.watch(socialProvider);
     final chat = ref.watch(chatProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: _listBackground(context),
       appBar: AppBar(
-        title: const Text('Telegram'),
+        title: const Text('PrvChat'),
         centerTitle: false,
         leading: IconButton(
           tooltip: '设置',
@@ -45,7 +44,6 @@ class ChatListScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 96),
           children: [
-            _AccountStrip(user: user),
             if (social.isLoading) const LinearProgressIndicator(minHeight: 2),
             if (social.errorMessage != null)
               Padding(
@@ -62,7 +60,19 @@ class ChatListScreen extends ConsumerWidget {
                 _ConversationTile(
                   avatar: DefaultAvatar(index: contact.avatarIndex),
                   title: contact.displayName,
-                  subtitle: 'ID ${contact.account}',
+                  subtitle: _conversationPreview(
+                    chat.lastMessageForConversation(
+                      toType: ConversationType.user,
+                      peerId: contact.id,
+                    ),
+                    fallback: 'ID ${contact.account}',
+                  ),
+                  timeLabel: _conversationTimeLabel(
+                    chat.lastMessageForConversation(
+                      toType: ConversationType.user,
+                      peerId: contact.id,
+                    ),
+                  ),
                   unreadCount: chat.unreadCountFor(contact.id),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -83,12 +93,28 @@ class ChatListScreen extends ConsumerWidget {
                 _ConversationTile(
                   avatar: CircleAvatar(
                     backgroundColor: Theme.of(context).colorScheme.primary,
+                    radius: 26,
                     child: const Icon(Icons.group, color: Colors.white),
                   ),
                   title: group.name,
-                  subtitle:
-                      '${group.members.length} 人 · 群ID ${group.groupCode}',
-                  unreadCount: 0,
+                  subtitle: _conversationPreview(
+                    chat.lastMessageForConversation(
+                      toType: ConversationType.group,
+                      peerId: group.id,
+                    ),
+                    fallback:
+                        '${group.members.length} 人 · 群ID ${group.groupCode}',
+                  ),
+                  timeLabel: _conversationTimeLabel(
+                    chat.lastMessageForConversation(
+                      toType: ConversationType.group,
+                      peerId: group.id,
+                    ),
+                  ),
+                  unreadCount: chat.unreadCountForConversation(
+                    toType: ConversationType.group,
+                    peerId: group.id,
+                  ),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => GroupScreen(groupId: group.id),
@@ -328,39 +354,82 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   }
 }
 
-class _AccountStrip extends StatelessWidget {
-  const _AccountStrip({required this.user});
-
-  final User? user;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.fromLTRB(20, 8, 12, 10),
-      leading: DefaultAvatar(index: user?.avatarIndex ?? 0, radius: 24),
-      title: Text(
-        user?.displayName ?? '',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-      subtitle: Text(user == null ? '' : 'ID ${user!.account}'),
-      trailing: IconButton(
-        tooltip: '复制 ID',
-        onPressed: user == null
-            ? null
-            : () async {
-                await Clipboard.setData(ClipboardData(text: user!.account));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('ID 已复制')));
-                }
-              },
-        icon: const Icon(Icons.copy_outlined),
-      ),
-    );
+String _conversationPreview(Message? message, {required String fallback}) {
+  if (message == null) {
+    return fallback;
   }
+  if (message.status == MessageStatus.revoked) {
+    return '消息已撤回';
+  }
+  if (message.status == MessageStatus.burned) {
+    return '';
+  }
+  return switch (message.type) {
+    MessageType.voice => '语音消息',
+    MessageType.image => '图片',
+    MessageType.file => '文件',
+    MessageType.burn =>
+      _isVoiceBurnContent(message.content) ? '语音消息' : message.content ?? '',
+    MessageType.text => message.content ?? '',
+  };
+}
+
+bool _isVoiceBurnContent(String? content) {
+  if (content == null || content.isEmpty) {
+    return false;
+  }
+  try {
+    final decoded = jsonDecode(content);
+    return decoded is Map && decoded['kind'] == 'voice';
+  } catch (_) {
+    final normalized = content.trim().toLowerCase();
+    final isMediaPath =
+        normalized.startsWith('/media/') ||
+        normalized.startsWith('media/') ||
+        normalized.startsWith('http://') ||
+        normalized.startsWith('https://');
+    final isAudio =
+        normalized.endsWith('.m4a') ||
+        normalized.endsWith('.aac') ||
+        normalized.endsWith('.mp3') ||
+        normalized.endsWith('.wav') ||
+        normalized.endsWith('.ogg') ||
+        normalized.contains('/voice');
+    return isMediaPath && isAudio;
+  }
+}
+
+String _conversationTimeLabel(Message? message) {
+  if (message == null) {
+    return '';
+  }
+  final local = message.timestamp.toLocal();
+  final now = DateTime.now();
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    return _twoDigitsTime(local);
+  }
+  final yesterday = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).subtract(const Duration(days: 1));
+  if (local.year == yesterday.year &&
+      local.month == yesterday.month &&
+      local.day == yesterday.day) {
+    return '昨天';
+  }
+  if (local.year == now.year) {
+    return '${local.month}/${local.day}';
+  }
+  return '${local.year}/${local.month}/${local.day}';
+}
+
+String _twoDigitsTime(DateTime value) {
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
 
 class _ConversationTile extends StatelessWidget {
@@ -368,6 +437,7 @@ class _ConversationTile extends StatelessWidget {
     required this.avatar,
     required this.title,
     required this.subtitle,
+    this.timeLabel = '',
     required this.unreadCount,
     required this.onTap,
   });
@@ -375,55 +445,127 @@ class _ConversationTile extends StatelessWidget {
   final Widget avatar;
   final String title;
   final String subtitle;
+  final String timeLabel;
   final int unreadCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      minVerticalPadding: 8,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: avatar,
-      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            '现在',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: unreadCount > 0
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (unreadCount > 0)
-            Container(
-              constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(99),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                unreadCount > 99 ? '99+' : unreadCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+    final titleStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+    final subtitleStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: _secondaryText(context));
+    final timeStyle = Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: _tertiaryText(context));
+
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        color: Theme.of(context).colorScheme.surface,
+        padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
+        child: Row(
+          children: [
+            SizedBox.square(dimension: 54, child: Center(child: avatar)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: _dividerColor(context)),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
+                            ),
+                          ),
+                          if (timeLabel.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(timeLabel, style: timeStyle),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: subtitleStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 160),
+                            child: unreadCount > 0
+                                ? DecoratedBox(
+                                    key: const Key('chat-list-unread-dot-box'),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const SizedBox(
+                                      key: Key('chat-list-unread-dot'),
+                                      width: 10,
+                                      height: 10,
+                                    ),
+                                  )
+                                : const SizedBox(width: 10, height: 10),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            )
-          else
-            const SizedBox(height: 22),
-        ],
+            ),
+          ],
+        ),
       ),
-      onTap: onTap,
     );
   }
+}
+
+Color _listBackground(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Theme.of(context).colorScheme.surface
+      : Colors.white;
+}
+
+Color _secondaryText(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white70
+      : const Color(0xFF6D7885);
+}
+
+Color _tertiaryText(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white54
+      : const Color(0xFF8A96A3);
+}
+
+Color _dividerColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFFE7EBEF);
 }
 
 class _EmptyState extends StatelessWidget {

@@ -41,6 +41,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
 
   @override
   void dispose() {
+    ref.read(groupProvider).closeMessages(widget.groupId);
     unawaited(_secureWindowService.disable());
     super.dispose();
   }
@@ -71,7 +72,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Start group call',
+            tooltip: '群通话',
             onPressed: () async {
               final memberIds = group.memberNames.keys
                   .where((id) => id != currentUserId)
@@ -144,7 +145,8 @@ class GroupSettingsScreen extends ConsumerStatefulWidget {
   final String groupId;
 
   @override
-  ConsumerState<GroupSettingsScreen> createState() => _GroupSettingsScreenState();
+  ConsumerState<GroupSettingsScreen> createState() =>
+      _GroupSettingsScreenState();
 }
 
 class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
@@ -167,7 +169,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
             title: Text(group?.name ?? '群聊'),
             subtitle: Text(group == null ? '' : '群ID ${group.groupCode}'),
             trailing: const Icon(Icons.edit_outlined),
-            onTap: group == null ? null : () => _renameGroup(context, group.name),
+            onTap: group == null
+                ? null
+                : () => _renameGroup(context, group.name),
           ),
           SwitchListTile(
             title: const Text('禁止截屏'),
@@ -178,7 +182,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           ListTile(
             leading: const Icon(Icons.person_add_alt_1_outlined),
             title: const Text('添加成员'),
-            onTap: group == null ? null : () => _addMembers(context, contacts, members),
+            onTap: group == null
+                ? null
+                : () => _addMembers(context, contacts, members),
           ),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -206,10 +212,7 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           content: TextField(
             controller: controller,
             maxLength: 50,
-            decoration: InputDecoration(
-              labelText: '群名称',
-              errorText: errorText,
-            ),
+            decoration: InputDecoration(labelText: '群名称', errorText: errorText),
           ),
           actions: [
             TextButton(
@@ -224,10 +227,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
                   return;
                 }
                 try {
-                  await ref.read(socialProvider).renameGroup(
-                        groupId: widget.groupId,
-                        name: name,
-                      );
+                  await ref
+                      .read(socialProvider)
+                      .renameGroup(groupId: widget.groupId, name: name);
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
@@ -250,7 +252,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
     List<GroupMember> members,
   ) async {
     final existingIds = {for (final member in members) member.userId};
-    final candidates = contacts.where((contact) => !existingIds.contains(contact.id)).toList();
+    final candidates = contacts
+        .where((contact) => !existingIds.contains(contact.id))
+        .toList();
     final selected = <String>{};
     String? errorText;
     await showDialog<void>(
@@ -264,7 +268,12 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (errorText != null)
-                  Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    errorText!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 if (candidates.isEmpty)
                   const Text('没有可添加的联系人')
                 else
@@ -296,7 +305,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
                   ? null
                   : () async {
                       try {
-                        await ref.read(socialProvider).addGroupMembers(
+                        await ref
+                            .read(socialProvider)
+                            .addGroupMembers(
                               groupId: widget.groupId,
                               memberIds: selected.toList(),
                             );

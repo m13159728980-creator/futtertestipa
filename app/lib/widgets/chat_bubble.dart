@@ -31,8 +31,8 @@ class ChatBubble extends StatelessWidget {
         : isBurned
         ? 'Message burned'
         : message.content ?? '';
-    final voicePayload = message.type == MessageType.voice && !isBurned
-        ? _voicePayload(message.content)
+    final voicePayload = !isBurned
+        ? _voicePayload(message.content, type: message.type)
         : null;
 
     return Align(
@@ -79,6 +79,7 @@ class ChatBubble extends StatelessWidget {
                       : MediaMessageTile(
                           type: MessageType.voice,
                           localPath: voicePayload.localPath,
+                          remoteUrl: voicePayload.url,
                           fileSizeBytes: voicePayload.sizeBytes,
                           duration: voicePayload.duration,
                         ),
@@ -97,6 +98,15 @@ class ChatBubble extends StatelessWidget {
                             )
                           : const SizedBox.shrink(),
                     ),
+                    Text(
+                      _messageTimeLabel(message.timestamp),
+                      key: const Key('chat-bubble-time'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.black45,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (isMine) const SizedBox(width: 3),
                     _MessageStatusIcon(status: message.status, visible: isMine),
                   ],
                 ),
@@ -109,7 +119,17 @@ class ChatBubble extends StatelessWidget {
   }
 }
 
-_VoiceBubblePayload? _voicePayload(String? content) {
+String _messageTimeLabel(DateTime timestamp) {
+  final local = timestamp.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+_VoiceBubblePayload? _voicePayload(
+  String? content, {
+  required MessageType type,
+}) {
   if (content == null || content.isEmpty) {
     return null;
   }
@@ -118,30 +138,64 @@ _VoiceBubblePayload? _voicePayload(String? content) {
     if (decoded is! Map<String, dynamic>) {
       return null;
     }
+    if (type != MessageType.voice && decoded['kind'] != 'voice') {
+      return null;
+    }
     return _VoiceBubblePayload(
+      url: decoded['url']?.toString(),
       localPath: decoded['localPath']?.toString(),
       sizeBytes: decoded['sizeBytes'] is int
           ? decoded['sizeBytes'] as int
           : int.tryParse(decoded['sizeBytes']?.toString() ?? ''),
       duration: Duration(
-        milliseconds:
-            decoded['durationMs'] is int
-                ? decoded['durationMs'] as int
-                : int.tryParse(decoded['durationMs']?.toString() ?? '') ?? 0,
+        milliseconds: decoded['durationMs'] is int
+            ? decoded['durationMs'] as int
+            : int.tryParse(decoded['durationMs']?.toString() ?? '') ?? 0,
       ),
     );
   } catch (_) {
+    if ((type == MessageType.voice || type == MessageType.burn) &&
+        _looksLikeVoiceUrl(content)) {
+      return _VoiceBubblePayload(
+        url: content,
+        localPath: null,
+        sizeBytes: null,
+        duration: Duration.zero,
+      );
+    }
     return null;
   }
 }
 
+bool _looksLikeVoiceUrl(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty || normalized.contains(RegExp(r'\s'))) {
+    return false;
+  }
+  final isMediaPath =
+      normalized.startsWith('/media/') ||
+      normalized.startsWith('media/') ||
+      normalized.startsWith('http://') ||
+      normalized.startsWith('https://');
+  final isAudio =
+      normalized.endsWith('.m4a') ||
+      normalized.endsWith('.aac') ||
+      normalized.endsWith('.mp3') ||
+      normalized.endsWith('.wav') ||
+      normalized.endsWith('.ogg') ||
+      normalized.contains('/voice');
+  return isMediaPath && isAudio;
+}
+
 class _VoiceBubblePayload {
   const _VoiceBubblePayload({
+    required this.url,
     required this.localPath,
     required this.sizeBytes,
     required this.duration,
   });
 
+  final String? url;
   final String? localPath;
   final int? sizeBytes;
   final Duration duration;

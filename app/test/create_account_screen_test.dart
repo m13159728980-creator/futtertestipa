@@ -88,6 +88,9 @@ class _FakeApiService implements ApiService {
   Future<List<User>> listContacts({required String token}) async => const [];
 
   @override
+  Future<List<Group>> listGroups({required String token}) async => const [];
+
+  @override
   Future<User> addContact({required String token, required String account}) {
     throw UnimplementedError();
   }

@@ -48,6 +48,53 @@ test('websocket requires auth before routing messages', async () => {
   expect(await repository.syncMessagesForUser(2, new Date(0))).toEqual([]);
 });
 
+test('websocket broadcasts real presence updates and login snapshots', async () => {
+  const socketServer = createSocketServer({
+    messageService: {},
+    authenticateToken: async (token) => {
+      if (token === 'alice-token') {
+        return { id: 1 };
+      }
+      if (token === 'bob-token') {
+        return { id: 2 };
+      }
+      return null;
+    }
+  });
+  const alice = createFakeSocket();
+  const bob = createFakeSocket();
+
+  socketServer.handleConnection(alice);
+  await alice.emitMessage({ type: 'auth', token: 'alice-token' });
+
+  expect(alice.sent).toEqual([
+    { type: 'auth:ok', payload: { userId: 1 } },
+    { type: 'presence.snapshot', payload: { onlineUserIds: [] } }
+  ]);
+  alice.sent.length = 0;
+
+  socketServer.handleConnection(bob);
+  await bob.emitMessage({ type: 'auth', token: 'bob-token' });
+
+  expect(bob.sent).toEqual([
+    { type: 'auth:ok', payload: { userId: 2 } },
+    { type: 'presence.snapshot', payload: { onlineUserIds: [1] } }
+  ]);
+  expect(alice.sent).toEqual([
+    { type: 'presence.updated', payload: { userId: 2, isOnline: true } }
+  ]);
+
+  alice.sent.length = 0;
+  bob.emitClose();
+
+  expect(alice.sent).toEqual([
+    expect.objectContaining({
+      type: 'presence.updated',
+      payload: expect.objectContaining({ userId: 2, isOnline: false })
+    })
+  ]);
+});
+
 test('websocket uses approved event names and does not leak fan-out targets', async () => {
   const repository = createMemoryMessageRepository();
   const messageService = createMessageService({ messageRepository: repository });

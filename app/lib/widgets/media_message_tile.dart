@@ -1,35 +1,103 @@
+import 'dart:io';
+
+import 'package:app/core/config/app_config.dart';
 import 'package:app/models/message.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+abstract class VoicePlaybackController {
+  Future<bool> play({String? localPath, String? remoteUrl});
+
+  void dispose();
+}
+
+class NativeVoicePlaybackController implements VoicePlaybackController {
+  NativeVoicePlaybackController({
+    String baseUrl = AppConfig.apiBaseUrl,
+    MethodChannel channel = const MethodChannel('app/voice_playback'),
+  }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), ''),
+       _channel = channel;
+
+  final String _baseUrl;
+  final MethodChannel _channel;
+
+  @override
+  Future<bool> play({String? localPath, String? remoteUrl}) async {
+    final source = await _source(localPath: localPath, remoteUrl: remoteUrl);
+    if (source == null) {
+      return false;
+    }
+
+    return await _channel.invokeMethod<bool>('play', {'source': source}) ??
+        true;
+  }
+
+  Future<String?> _source({String? localPath, String? remoteUrl}) async {
+    final path = localPath;
+    if (path != null && path.isNotEmpty && await File(path).exists()) {
+      return path;
+    }
+    final url = remoteUrl;
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+    return _absoluteUrl(url);
+  }
+
+  String _absoluteUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    final normalizedPath = url.startsWith('/') ? url : '/$url';
+    return '$_baseUrl$normalizedPath';
+  }
+
+  @override
+  void dispose() {
+    _channel.invokeMethod<void>('stop');
+  }
+}
 
 class MediaMessageTile extends StatelessWidget {
   const MediaMessageTile({
     required this.type,
     this.title,
     this.localPath,
+    this.remoteUrl,
     this.fileSizeBytes,
     this.duration,
     this.onTap,
+    this.voicePlaybackController,
     super.key,
   });
 
   final MessageType type;
   final String? title;
   final String? localPath;
+  final String? remoteUrl;
   final int? fileSizeBytes;
   final Duration? duration;
   final VoidCallback? onTap;
+  final VoicePlaybackController? voicePlaybackController;
 
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
+    final isVoice = type == MessageType.voice;
     return InkWell(
       key: const Key('media-message-tile'),
       borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
+      onTap: isVoice ? null : onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 180, maxWidth: 280),
+        constraints: BoxConstraints(
+          minWidth: isVoice ? 132 : 180,
+          maxWidth: isVoice ? 220 : 280,
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.symmetric(
+            horizontal: isVoice ? 6 : 8,
+            vertical: isVoice ? 4 : 8,
+          ),
           child: switch (type) {
             MessageType.image => _ImageTile(
               title: title ?? 'Image',
@@ -38,9 +106,12 @@ class MediaMessageTile extends StatelessWidget {
               color: color,
             ),
             MessageType.voice => _VoiceTile(
+              localPath: localPath,
+              remoteUrl: remoteUrl,
               duration: duration,
-              fileSizeBytes: fileSizeBytes,
               color: color,
+              playbackController: voicePlaybackController,
+              onTap: onTap,
             ),
             MessageType.file => _FileTile(
               title: title ?? 'File',
@@ -95,44 +166,111 @@ class _ImageTile extends StatelessWidget {
   }
 }
 
-class _VoiceTile extends StatelessWidget {
+class _VoiceTile extends StatefulWidget {
   const _VoiceTile({
+    required this.localPath,
+    required this.remoteUrl,
     required this.duration,
-    required this.fileSizeBytes,
     required this.color,
+    required this.playbackController,
+    required this.onTap,
   });
 
+  final String? localPath;
+  final String? remoteUrl;
   final Duration? duration;
-  final int? fileSizeBytes;
   final Color color;
+  final VoicePlaybackController? playbackController;
+  final VoidCallback? onTap;
+
+  @override
+  State<_VoiceTile> createState() => _VoiceTileState();
+}
+
+class _VoiceTileState extends State<_VoiceTile> {
+  late final VoicePlaybackController _playbackController =
+      widget.playbackController ?? NativeVoicePlaybackController();
+  late final bool _ownsController = widget.playbackController == null;
+  bool _playing = false;
+
+  @override
+  void dispose() {
+    if (_ownsController) {
+      _playbackController.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _play() async {
+    widget.onTap?.call();
+    if (mounted) {
+      setState(() => _playing = true);
+    }
+    try {
+      final started = await _playbackController.play(
+        localPath: widget.localPath,
+        remoteUrl: widget.remoteUrl,
+      );
+      if (!started && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('语音文件不可用')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('语音播放失败')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _playing = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: color,
-          child: const Icon(Icons.play_arrow, color: Colors.white, size: 22),
+        Material(
+          color: widget.color,
+          shape: const CircleBorder(),
+          child: InkWell(
+            key: const Key('voice-message-play-button'),
+            customBorder: const CircleBorder(),
+            onTap: _play,
+            child: SizedBox.square(
+              dimension: 30,
+              child: Icon(
+                _playing ? Icons.stop : Icons.play_arrow,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                height: 28,
+                height: 20,
                 child: CustomPaint(
-                  painter: _VoiceWavePainter(color: color),
+                  painter: _VoiceWavePainter(color: widget.color),
                   child: const SizedBox.expand(),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
-                '${_formatDuration(duration)}  ${_formatBytes(fileSizeBytes)}',
-                style: Theme.of(context).textTheme.labelSmall,
+                _formatDuration(widget.duration),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  height: 1,
+                  color: Colors.black54,
+                ),
               ),
             ],
           ),
@@ -148,24 +286,18 @@ class _VoiceWavePainter extends CustomPainter {
   final Color color;
 
   static const _bars = [
-    8,
-    14,
-    20,
+    7,
     12,
-    24,
     18,
     10,
-    26,
-    16,
-    22,
-    12,
-    18,
-    9,
-    24,
-    15,
     20,
-    11,
-    16,
+    15,
+    8,
+    19,
+    12,
+    17,
+    9,
+    14,
   ];
 
   @override
