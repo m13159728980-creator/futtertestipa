@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app/core/services/media_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
@@ -13,8 +14,10 @@ import 'package:app/widgets/burn_mode_menu.dart';
 import 'package:app/widgets/chat_bubble.dart';
 import 'package:app/widgets/default_avatar.dart';
 import 'package:app/widgets/message_composer.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({
@@ -134,6 +137,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ref.read(chatProvider).sendText(widget.peerId, text),
             onVoiceStart: _voiceRecordingService.start,
             onVoiceSend: (_) => unawaited(_sendRecordedVoice()),
+            onAttachmentSelected: (action) =>
+                unawaited(_sendAttachment(action)),
           ),
         ],
       ),
@@ -167,6 +172,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('语音发送失败: $error')));
+    }
+  }
+
+  Future<void> _sendAttachment(ComposerAttachmentAction action) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: switch (action) {
+          ComposerAttachmentAction.image => FileType.image,
+          ComposerAttachmentAction.video => FileType.video,
+          ComposerAttachmentAction.file => FileType.any,
+        },
+        allowMultiple: false,
+        withData: false,
+      );
+      final selectedPath = result?.files.single.path;
+      if (selectedPath == null || selectedPath.isEmpty) {
+        return;
+      }
+      final selectedName = result?.files.single.name;
+
+      final selectedFile = File(selectedPath);
+      final preparedFile = action == ComposerAttachmentAction.image
+          ? (await _mediaService.prepareImage(selectedFile)).file
+          : selectedFile;
+      await _mediaService.validateFile(preparedFile);
+      final token = ref.read(authProvider).user?.token;
+      final remotePath = await _mediaService.upload(preparedFile, token: token);
+      final title = selectedName != null && selectedName.isNotEmpty
+          ? selectedName
+          : p.basename(selectedPath);
+      await ref
+          .read(chatProvider)
+          .sendMedia(
+            peerId: widget.peerId,
+            type: action == ComposerAttachmentAction.image
+                ? MessageType.image
+                : MessageType.file,
+            payload: MediaMessagePayload(
+              url: remotePath,
+              localPath: preparedFile.path,
+              title: title,
+              sizeBytes: await preparedFile.length(),
+            ),
+          );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('附件发送失败 $error')));
     }
   }
 }

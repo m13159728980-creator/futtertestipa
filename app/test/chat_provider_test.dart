@@ -231,6 +231,82 @@ void main() {
     await webSocketService.dispose();
   });
 
+  test('sends image messages with uploaded media metadata', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+      uuid: const _FixedUuid('11111111-1111-4111-8111-111111111111'),
+    );
+
+    await provider.sendMedia(
+      peerId: 'alice',
+      type: MessageType.image,
+      payload: const MediaMessagePayload(
+        url: '/media/photo-1',
+        localPath: '/local/photo.jpg',
+        title: 'photo.jpg',
+        sizeBytes: 4096,
+      ),
+    );
+
+    final message = provider.messagesFor('alice').single;
+    expect(message.type, MessageType.image);
+    expect(message.content, contains('/media/photo-1'));
+    expect(message.content, contains('/local/photo.jpg'));
+    expect(message.content, contains('"title":"photo.jpg"'));
+    expect(socket.sentJson.last['payload'], containsPair('type', 'image'));
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
+  test('sends file messages with uploaded media metadata', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+    );
+
+    await provider.sendMedia(
+      peerId: 'alice',
+      type: MessageType.file,
+      payload: const MediaMessagePayload(
+        url: '/media/doc-1',
+        localPath: '/local/doc.pdf',
+        title: 'doc.pdf',
+        sizeBytes: 8192,
+      ),
+    );
+
+    final message = provider.messagesFor('alice').single;
+    expect(message.type, MessageType.file);
+    expect(message.content, contains('"kind":"file"'));
+    expect(message.content, contains('/media/doc-1'));
+    expect(socket.sentJson.last['payload'], containsPair('type', 'file'));
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
   test('sent messages and incoming messages play chat sound effects', () async {
     final database = LocalDatabaseService(
       cryptoService: CryptoService(CryptoService.generateKey()),
@@ -666,49 +742,52 @@ void main() {
     },
   );
 
-  test('local burn expiry notifies the server so messages stay burned', () async {
-    final database = LocalDatabaseService(
-      cryptoService: CryptoService(CryptoService.generateKey()),
-      store: InMemoryMessageStore(),
-    );
-    final socket = _FakeWebSocketChannel();
-    final webSocketService = WebSocketService(connector: (_) => socket);
-    webSocketService.connect(token: 'token-1');
-    final provider = ChatProvider(
-      currentUserId: 'me',
-      database: database,
-      syncService: NoopMessageSyncService(),
-      webSocketService: webSocketService,
-    );
-    await provider.handleEvent(
-      WebSocketEvent(
-        type: 'message.send',
-        payload: {
-          'message': _message(
-            id: 'local-burned-message',
-            fromId: 'alice',
-            toId: 'me',
-            content: 'secret',
-          ).toJson(),
+  test(
+    'local burn expiry notifies the server so messages stay burned',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+      await provider.handleEvent(
+        WebSocketEvent(
+          type: 'message.send',
+          payload: {
+            'message': _message(
+              id: 'local-burned-message',
+              fromId: 'alice',
+              toId: 'me',
+              content: 'secret',
+            ).toJson(),
+          },
+        ),
+      );
+      socket.clearSent();
+
+      await provider.markBurned('local-burned-message');
+
+      expect(provider.messagesFor('alice'), isEmpty);
+      expect(socket.sentJson, [
+        {
+          'type': 'message.burned',
+          'payload': {'messageId': 'local-burned-message'},
         },
-      ),
-    );
-    socket.clearSent();
+      ]);
 
-    await provider.markBurned('local-burned-message');
-
-    expect(provider.messagesFor('alice'), isEmpty);
-    expect(socket.sentJson, [
-      {
-        'type': 'message.burned',
-        'payload': {'messageId': 'local-burned-message'},
-      },
-    ]);
-
-    provider.dispose();
-    await database.close();
-    await webSocketService.dispose();
-  });
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
 
   test('sync does not resurrect remotely burned messages', () async {
     final database = LocalDatabaseService(
@@ -757,54 +836,57 @@ void main() {
     expect(provider.messagesFor('peer'), isEmpty);
   });
 
-  test('sync does not resurrect a locally burned message awaiting server echo', () async {
-    final database = LocalDatabaseService(
-      cryptoService: CryptoService(CryptoService.generateKey()),
-      store: InMemoryMessageStore(),
-    );
-    final remote = _StaticMessageSyncService();
-    final provider = ChatProvider(
-      currentUserId: 'me',
-      database: database,
-      syncService: remote,
-      webSocketService: WebSocketService(
-        connector: (_) => throw StateError('unused'),
-      ),
-    );
-    await database.open();
-    await database.upsertMessage(
-      Message(
-        id: 'local-burn-tombstone',
-        fromId: 'peer',
-        toId: 'me',
-        toType: ConversationType.user,
-        type: MessageType.burn,
-        content: 'gone',
-        timestamp: DateTime.utc(2026, 5, 10),
-        burnAfter: const Duration(seconds: 5),
-        status: MessageStatus.burned,
-      ),
-    );
-    remote.messages = [
-      Message(
-        id: 'local-burn-tombstone',
-        fromId: 'peer',
-        toId: 'me',
-        toType: ConversationType.user,
-        type: MessageType.burn,
-        content: 'gone',
-        timestamp: DateTime.utc(2026, 5, 10),
-        burnAfter: const Duration(seconds: 5),
-        status: MessageStatus.read,
-      ),
-    ];
+  test(
+    'sync does not resurrect a locally burned message awaiting server echo',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final remote = _StaticMessageSyncService();
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: remote,
+        webSocketService: WebSocketService(
+          connector: (_) => throw StateError('unused'),
+        ),
+      );
+      await database.open();
+      await database.upsertMessage(
+        Message(
+          id: 'local-burn-tombstone',
+          fromId: 'peer',
+          toId: 'me',
+          toType: ConversationType.user,
+          type: MessageType.burn,
+          content: 'gone',
+          timestamp: DateTime.utc(2026, 5, 10),
+          burnAfter: const Duration(seconds: 5),
+          status: MessageStatus.burned,
+        ),
+      );
+      remote.messages = [
+        Message(
+          id: 'local-burn-tombstone',
+          fromId: 'peer',
+          toId: 'me',
+          toType: ConversationType.user,
+          type: MessageType.burn,
+          content: 'gone',
+          timestamp: DateTime.utc(2026, 5, 10),
+          burnAfter: const Duration(seconds: 5),
+          status: MessageStatus.read,
+        ),
+      ];
 
-    await provider.loadMessages('peer');
+      await provider.loadMessages('peer');
 
-    expect(provider.messagesFor('peer'), isEmpty);
-    provider.dispose();
-    await database.close();
-  });
+      expect(provider.messagesFor('peer'), isEmpty);
+      provider.dispose();
+      await database.close();
+    },
+  );
 
   test(
     'localDatabaseServiceProvider decrypts existing messages with persisted master key',

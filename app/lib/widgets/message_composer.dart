@@ -11,6 +11,7 @@ class MessageComposer extends StatefulWidget {
     this.onVoiceStart,
     this.onVoiceSend,
     this.onAttach,
+    this.onAttachmentSelected,
     this.onStickerSelected,
     this.recentEmojiStore,
     super.key,
@@ -20,6 +21,7 @@ class MessageComposer extends StatefulWidget {
   final Future<void> Function()? onVoiceStart;
   final ValueChanged<Duration>? onVoiceSend;
   final VoidCallback? onAttach;
+  final ValueChanged<ComposerAttachmentAction>? onAttachmentSelected;
   final ValueChanged<StickerItem>? onStickerSelected;
   final RecentEmojiStore? recentEmojiStore;
 
@@ -98,8 +100,9 @@ class _MessageComposerState extends State<MessageComposer> {
                     icon: const Icon(Icons.sticky_note_2_outlined),
                   ),
                   IconButton(
+                    key: const Key('composer-attach-button'),
                     tooltip: 'Attach',
-                    onPressed: widget.onAttach,
+                    onPressed: _showAttachmentMenu,
                     icon: const Icon(Icons.attach_file),
                   ),
                   IconButton(
@@ -159,9 +162,47 @@ class _MessageComposerState extends State<MessageComposer> {
     _controller.clear();
     setState(() => _panel = _ComposerPanel.none);
   }
+
+  Future<void> _showAttachmentMenu() async {
+    widget.onAttach?.call();
+    final action = await showModalBottomSheet<ComposerAttachmentAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_outlined),
+              title: const Text('图片'),
+              onTap: () =>
+                  Navigator.of(context).pop(ComposerAttachmentAction.image),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('视频'),
+              onTap: () =>
+                  Navigator.of(context).pop(ComposerAttachmentAction.video),
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('文件'),
+              onTap: () =>
+                  Navigator.of(context).pop(ComposerAttachmentAction.file),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action != null) {
+      widget.onAttachmentSelected?.call(action);
+    }
+  }
 }
 
 enum _ComposerPanel { none, emoji, stickers }
+
+enum ComposerAttachmentAction { image, video, file }
 
 class _VoiceRecordBar extends StatefulWidget {
   const _VoiceRecordBar({required this.onSend, this.onStart});

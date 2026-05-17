@@ -4,6 +4,7 @@ import 'package:app/models/message.dart';
 import 'package:app/widgets/burn_timer.dart';
 import 'package:app/widgets/media_message_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
@@ -35,93 +36,134 @@ class ChatBubble extends StatelessWidget {
         ? 'Message burned'
         : message.content ?? '';
     final voicePayload = !isBurned
-        ? _voicePayload(message.content, type: message.type)
+        ? _mediaPayload(message.content, type: message.type)
         : null;
+    final copyText = _copyableText(message);
 
     return Align(
       key: const Key('chat-bubble-align'),
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
-        child: DecoratedBox(
-          key: const Key('chat-bubble-decoration'),
-          decoration: BoxDecoration(
-            color: isMine ? mineColor : otherColor,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(14),
-              topRight: const Radius.circular(14),
-              bottomLeft: Radius.circular(isMine ? 14 : 4),
-              bottomRight: Radius.circular(isMine ? 4 : 14),
+        child: GestureDetector(
+          onLongPressStart: copyText == null
+              ? null
+              : (details) =>
+                    _showMessageMenu(context, details.globalPosition, copyText),
+          child: DecoratedBox(
+            key: const Key('chat-bubble-decoration'),
+            decoration: BoxDecoration(
+              color: isMine ? mineColor : otherColor,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(14),
+                topRight: const Radius.circular(14),
+                bottomLeft: Radius.circular(isMine ? 14 : 4),
+                bottomRight: Radius.circular(isMine ? 4 : 14),
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Column(
-              crossAxisAlignment: isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isMine && senderName != null) ...[
-                  Text(
-                    senderName!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: bubbleSecondaryTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 180),
-                  child: voicePayload == null
-                      ? Text(
-                          content,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: bubbleTextColor),
-                        )
-                      : MediaMessageTile(
-                          type: MessageType.voice,
-                          localPath: voicePayload.localPath,
-                          remoteUrl: voicePayload.url,
-                          fileSizeBytes: voicePayload.sizeBytes,
-                          duration: voicePayload.duration,
-                        ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      child: message.type == MessageType.burn && !isBurned
-                          ? _BurnTimerArea(
-                              key: ValueKey('burn-timer-${message.id}'),
-                              message: message,
-                              onExpired: onBurnExpired,
-                            )
-                          : const SizedBox.shrink(),
-                    ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Column(
+                crossAxisAlignment: isMine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!isMine && senderName != null) ...[
                     Text(
-                      _messageTimeLabel(message.timestamp),
-                      key: const Key('chat-bubble-time'),
+                      senderName!,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: bubbleTertiaryTextColor,
-                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: bubbleSecondaryTextColor,
                       ),
                     ),
-                    if (isMine) const SizedBox(width: 3),
-                    _MessageStatusIcon(status: message.status, visible: isMine),
+                    const SizedBox(height: 4),
                   ],
-                ),
-              ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    child: voicePayload == null
+                        ? Text(
+                            content,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: bubbleTextColor),
+                          )
+                        : MediaMessageTile(
+                            type: voicePayload.type,
+                            localPath: voicePayload.localPath,
+                            remoteUrl: voicePayload.url,
+                            title: voicePayload.title,
+                            fileSizeBytes: voicePayload.sizeBytes,
+                            duration: voicePayload.duration,
+                          ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: message.type == MessageType.burn && !isBurned
+                            ? _BurnTimerArea(
+                                key: ValueKey('burn-timer-${message.id}'),
+                                message: message,
+                                onExpired: onBurnExpired,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      Text(
+                        _messageTimeLabel(message.timestamp),
+                        key: const Key('chat-bubble-time'),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: bubbleTertiaryTextColor,
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (isMine) const SizedBox(width: 3),
+                      _MessageStatusIcon(
+                        status: message.status,
+                        visible: isMine,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
+  Future<void> _showMessageMenu(
+    BuildContext context,
+    Offset position,
+    String copyText,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final selected = await showMenu<_MessageMenuAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(value: _MessageMenuAction.copy, child: Text('复制')),
+      ],
+    );
+    if (selected != _MessageMenuAction.copy || !context.mounted) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: copyText));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制')));
+  }
 }
+
+enum _MessageMenuAction { copy }
 
 String _messageTimeLabel(DateTime timestamp) {
   final local = timestamp.toLocal();
@@ -130,7 +172,7 @@ String _messageTimeLabel(DateTime timestamp) {
   return '$hour:$minute';
 }
 
-_VoiceBubblePayload? _voicePayload(
+_MediaBubblePayload? _mediaPayload(
   String? content, {
   required MessageType type,
 }) {
@@ -142,12 +184,17 @@ _VoiceBubblePayload? _voicePayload(
     if (decoded is! Map<String, dynamic>) {
       return null;
     }
-    if (type != MessageType.voice && decoded['kind'] != 'voice') {
+    final kind = decoded['kind']?.toString();
+    final payloadType = _mediaTypeFromKind(kind) ?? type;
+    if (!_isMediaMessageType(payloadType) &&
+        !(type == MessageType.burn && _isMediaKind(kind))) {
       return null;
     }
-    return _VoiceBubblePayload(
+    return _MediaBubblePayload(
+      type: payloadType,
       url: decoded['url']?.toString(),
       localPath: decoded['localPath']?.toString(),
+      title: decoded['title']?.toString(),
       sizeBytes: decoded['sizeBytes'] is int
           ? decoded['sizeBytes'] as int
           : int.tryParse(decoded['sizeBytes']?.toString() ?? ''),
@@ -160,15 +207,53 @@ _VoiceBubblePayload? _voicePayload(
   } catch (_) {
     if ((type == MessageType.voice || type == MessageType.burn) &&
         _looksLikeVoiceUrl(content)) {
-      return _VoiceBubblePayload(
+      return _MediaBubblePayload(
+        type: MessageType.voice,
         url: content,
         localPath: null,
+        title: null,
         sizeBytes: null,
         duration: Duration.zero,
       );
     }
     return null;
   }
+}
+
+String? _copyableText(Message message) {
+  if (message.status == MessageStatus.burned ||
+      message.status == MessageStatus.revoked) {
+    return null;
+  }
+  if (message.type == MessageType.text ||
+      (message.type == MessageType.burn &&
+          _mediaPayload(message.content, type: message.type) == null)) {
+    final content = message.content?.trim();
+    return content == null || content.isEmpty ? null : content;
+  }
+  return null;
+}
+
+MessageType? _mediaTypeFromKind(String? kind) {
+  return switch (kind) {
+    'image' => MessageType.image,
+    'voice' => MessageType.voice,
+    'file' || 'video' => MessageType.file,
+    _ => null,
+  };
+}
+
+bool _isMediaKind(String? kind) {
+  return kind == 'image' ||
+      kind == 'voice' ||
+      kind == 'file' ||
+      kind == 'video';
+}
+
+bool _isMediaMessageType(MessageType type) {
+  return type == MessageType.image ||
+      type == MessageType.voice ||
+      type == MessageType.file;
 }
 
 bool _looksLikeVoiceUrl(String value) {
@@ -191,16 +276,20 @@ bool _looksLikeVoiceUrl(String value) {
   return isMediaPath && isAudio;
 }
 
-class _VoiceBubblePayload {
-  const _VoiceBubblePayload({
+class _MediaBubblePayload {
+  const _MediaBubblePayload({
+    required this.type,
     required this.url,
     required this.localPath,
+    required this.title,
     required this.sizeBytes,
     required this.duration,
   });
 
+  final MessageType type;
   final String? url;
   final String? localPath;
+  final String? title;
   final int? sizeBytes;
   final Duration duration;
 }

@@ -258,6 +258,54 @@ void main() {
     },
   );
 
+  test(
+    'incoming one-to-one call title uses caller name instead of callee title',
+    () async {
+      final provider = CallProvider(
+        currentUserId: 'me',
+        currentUserName: 'Me',
+        signalingService: _FakeSignalingService(),
+        webRtcService: _FakeWebRtcService(),
+      );
+
+      await provider.handleEvent(
+        const WebSocketEvent(
+          type: 'call.invite',
+          payload: {
+            'callId': 'call-3',
+            'fromId': 'alice',
+            'fromName': 'Alice',
+            'participantIds': ['alice', 'me'],
+            'isGroup': false,
+            'title': 'Me',
+          },
+        ),
+      );
+
+      expect(provider.session?.title, 'Alice');
+    },
+  );
+
+  test(
+    'outgoing one-to-one call includes caller name in invite payload',
+    () async {
+      final signaling = _FakeSignalingService();
+      final provider = CallProvider(
+        currentUserId: 'me',
+        currentUserName: 'Me',
+        signalingService: signaling,
+        webRtcService: _FakeWebRtcService(),
+        callIdFactory: () => 'call-4',
+      );
+
+      await provider.startOneToOneCall(peerId: 'alice', peerName: 'Alice');
+
+      expect(signaling.sent.first.type, 'call.invite');
+      expect(signaling.sent.first.payload, containsPair('fromName', 'Me'));
+      expect(signaling.sent.first.payload, containsPair('peerTitle', 'Alice'));
+    },
+  );
+
   test('incoming and answered calls play call sound effects', () async {
     final sounds = _FakeSoundEffects();
     final provider = CallProvider(

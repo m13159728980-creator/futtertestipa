@@ -3,6 +3,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('attach button opens image video and file choices', (
+    tester,
+  ) async {
+    final actions = <ComposerAttachmentAction>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MessageComposer(
+            onSend: (_) {},
+            onAttachmentSelected: actions.add,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('composer-attach-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('文件'), findsOneWidget);
+
+    await tester.tap(find.text('视频'));
+    await tester.pumpAndSettle();
+
+    expect(actions, [ComposerAttachmentAction.video]);
+  });
+
   testWidgets('composer toggles between text input and voice bar', (
     tester,
   ) async {

@@ -317,17 +317,41 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> sendVoice(String peerId, VoiceMessagePayload payload) async {
+    return sendMedia(peerId: peerId, type: MessageType.voice, payload: payload);
+  }
+
+  Future<void> sendMedia({
+    required String peerId,
+    required MessageType type,
+    required MessageMediaPayload payload,
+  }) async {
+    return sendConversationMedia(
+      toType: ConversationType.user,
+      peerId: peerId,
+      type: type,
+      payload: payload,
+    );
+  }
+
+  Future<void> sendConversationMedia({
+    required ConversationType toType,
+    required String peerId,
+    required MessageType type,
+    required MessageMediaPayload payload,
+    Duration? burnAfter,
+  }) async {
+    if (type == MessageType.text || type == MessageType.burn) {
+      throw ArgumentError('sendMedia only supports image, voice, and file');
+    }
     final effectiveBurnAfter =
-        _burnAfterByConversation[_key(ConversationType.user, peerId)];
-    final content = effectiveBurnAfter == null
-        ? jsonEncode(payload.toJson())
-        : jsonEncode({'kind': 'voice', ...payload.toJson()});
+        burnAfter ?? _burnAfterByConversation[_key(toType, peerId)];
+    final content = jsonEncode({'kind': type.name, ...payload.toJson()});
     final message = Message(
       id: _uuid.v4(),
       fromId: _currentUserId,
       toId: peerId,
-      toType: ConversationType.user,
-      type: effectiveBurnAfter == null ? MessageType.voice : MessageType.burn,
+      toType: toType,
+      type: effectiveBurnAfter == null ? type : MessageType.burn,
       content: content,
       timestamp: DateTime.now().toUtc(),
       burnAfter: effectiveBurnAfter,
@@ -581,7 +605,11 @@ class ChatProvider extends ChangeNotifier {
   }
 }
 
-class VoiceMessagePayload {
+abstract interface class MessageMediaPayload {
+  Map<String, Object?> toJson();
+}
+
+class VoiceMessagePayload implements MessageMediaPayload {
   const VoiceMessagePayload({
     required this.url,
     required this.localPath,
@@ -594,11 +622,36 @@ class VoiceMessagePayload {
   final Duration duration;
   final int sizeBytes;
 
+  @override
   Map<String, Object?> toJson() {
     return {
       'url': url,
       'localPath': localPath,
       'durationMs': duration.inMilliseconds,
+      'sizeBytes': sizeBytes,
+    };
+  }
+}
+
+class MediaMessagePayload implements MessageMediaPayload {
+  const MediaMessagePayload({
+    required this.url,
+    required this.localPath,
+    required this.title,
+    required this.sizeBytes,
+  });
+
+  final String url;
+  final String localPath;
+  final String title;
+  final int sizeBytes;
+
+  @override
+  Map<String, Object?> toJson() {
+    return {
+      'url': url,
+      'localPath': localPath,
+      'title': title,
       'sizeBytes': sizeBytes,
     };
   }

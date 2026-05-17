@@ -1,6 +1,7 @@
 import 'package:app/models/message.dart';
 import 'package:app/widgets/chat_bubble.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -85,6 +86,88 @@ void main() {
 
     expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
     expect(find.textContaining('0:03'), findsOneWidget);
+  });
+
+  testWidgets('image messages render media tile metadata', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.image,
+              content:
+                  '{"kind":"image","url":"/media/photo-1","localPath":"/local/photo.jpg","title":"photo.jpg","sizeBytes":4096}',
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+    expect(find.text('photo.jpg'), findsOneWidget);
+    expect(find.textContaining('4.0 KB'), findsOneWidget);
+  });
+
+  testWidgets('file messages render media tile metadata', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.file,
+              content:
+                  '{"kind":"file","url":"/media/doc-1","localPath":"/local/doc.pdf","title":"doc.pdf","sizeBytes":8192}',
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+    expect(find.text('doc.pdf'), findsOneWidget);
+    expect(find.textContaining('8.0 KB'), findsOneWidget);
+  });
+
+  testWidgets('long pressing text message copies content', (tester) async {
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(fromId: 'alice', content: 'copy me'),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    await tester.longPress(find.text('copy me'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制'));
+    await tester.pumpAndSettle();
+
+    expect(copied, ['copy me']);
+    expect(find.text('已复制'), findsOneWidget);
   });
 
   testWidgets(

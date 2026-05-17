@@ -89,6 +89,21 @@ class GroupProvider extends ChangeNotifier {
     );
   }
 
+  Future<void> sendMedia({
+    required String groupId,
+    required MessageType type,
+    required MessageMediaPayload payload,
+    Duration? burnAfter,
+  }) {
+    return _chat.sendConversationMedia(
+      toType: ConversationType.group,
+      peerId: groupId,
+      type: type,
+      payload: payload,
+      burnAfter: burnAfter,
+    );
+  }
+
   Future<void> markBurned(String messageId) {
     return _chat.markBurned(messageId);
   }

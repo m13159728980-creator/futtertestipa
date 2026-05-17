@@ -20,6 +20,7 @@ final callProvider = ChangeNotifierProvider<CallProvider>((ref) {
   final webSocketService = ref.watch(webSocketServiceProvider);
   return CallProvider(
     currentUserId: auth.user?.id ?? '',
+    currentUserName: auth.user?.displayName ?? '',
     signalingService: WebSocketCallSignalingService(webSocketService),
     webRtcService: ref.watch(webRtcServiceProvider),
     soundEffects: ref.watch(soundEffectPlayerProvider),
@@ -46,12 +47,14 @@ class WebSocketCallSignalingService implements CallSignalingService {
 class CallProvider extends ChangeNotifier {
   CallProvider({
     required String currentUserId,
+    String currentUserName = '',
     required CallSignalingService signalingService,
     required WebRtcService webRtcService,
     SoundEffectPlayer? soundEffects,
     String Function()? callIdFactory,
     DateTime Function()? now,
   }) : _currentUserId = currentUserId,
+       _currentUserName = currentUserName,
        _signalingService = signalingService,
        _webRtcService = webRtcService,
        _soundEffects = soundEffects,
@@ -63,6 +66,7 @@ class CallProvider extends ChangeNotifier {
   static const maxParticipants = 8;
 
   final String _currentUserId;
+  final String _currentUserName;
   final CallSignalingService _signalingService;
   final WebRtcService _webRtcService;
   final SoundEffectPlayer? _soundEffects;
@@ -146,6 +150,9 @@ class CallProvider extends ChangeNotifier {
           'isGroup': isGroup,
           'video': video,
           'title': title,
+          'peerTitle': title,
+          if (_currentUserName.trim().isNotEmpty)
+            'fromName': _currentUserName.trim(),
         },
       ),
     );
@@ -254,7 +261,11 @@ class CallProvider extends ChangeNotifier {
       participantIds: participantIds,
       participants: _participantsFromPayload(payload, participantIds),
       isGroup: payload['isGroup'] == true,
-      title: payload['title']?.toString() ?? fromId,
+      title: _incomingTitle(
+        payload,
+        currentUserName: _currentUserName,
+        fallback: fromId,
+      ),
       peerId: fromId,
     );
     _isVideoCall = payload['video'] == true;
@@ -435,6 +446,45 @@ Map<String, CallParticipantState> _participantsFromPayload(
     };
   }
   return {for (final id in participantIds) id: CallParticipantState.invited};
+}
+
+String _incomingTitle(
+  Map<String, dynamic> payload, {
+  required String currentUserName,
+  required String fallback,
+}) {
+  if (payload['isGroup'] == true) {
+    return _firstNonEmpty([payload['title'], payload['groupName'], fallback]);
+  }
+  return _firstNonEmpty([
+    payload['fromName'],
+    payload['callerName'],
+    payload['caller'] is Map ? (payload['caller'] as Map)['displayName'] : null,
+    _legacyTitleIfNotCurrentUser(payload['title'], currentUserName),
+    fallback,
+  ]);
+}
+
+String? _legacyTitleIfNotCurrentUser(Object? value, String currentUserName) {
+  final title = value?.toString().trim();
+  if (title == null || title.isEmpty) {
+    return null;
+  }
+  final current = currentUserName.trim();
+  if (current.isNotEmpty && title == current) {
+    return null;
+  }
+  return title;
+}
+
+String _firstNonEmpty(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim();
+    if (text != null && text.isNotEmpty) {
+      return text;
+    }
+  }
+  return '';
 }
 
 Map<String, dynamic>? _map(Object? value) {
