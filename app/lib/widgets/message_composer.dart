@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app/core/constants/sticker_catalog.dart';
 import 'package:app/widgets/emoji_picker.dart';
 import 'package:app/widgets/sticker_pack_viewer.dart';
@@ -172,31 +174,45 @@ class _VoiceRecordBar extends StatefulWidget {
 }
 
 class _VoiceRecordBarState extends State<_VoiceRecordBar> {
+  static const Duration _maxDuration = Duration(seconds: 60);
+
   DateTime? _startedAt;
+  Timer? _ticker;
+  Duration _elapsed = Duration.zero;
+  bool _sending = false;
 
   bool get _recording => _startedAt != null;
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       key: const Key('voice-record-bar'),
       onLongPressStart: (_) async {
-        setState(() => _startedAt = DateTime.now());
-        await widget.onStart?.call();
-      },
-      onLongPressEnd: (_) {
-        final startedAt = _startedAt;
-        if (startedAt == null) {
+        if (_recording) {
           return;
         }
-        final duration = DateTime.now().difference(startedAt);
-        setState(() => _startedAt = null);
-        widget.onSend(
-          duration < const Duration(seconds: 1)
-              ? const Duration(seconds: 1)
-              : duration,
-        );
+        final startedAt = DateTime.now();
+        setState(() {
+          _startedAt = startedAt;
+          _elapsed = Duration.zero;
+          _sending = false;
+        });
+        _ticker?.cancel();
+        _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+        try {
+          await widget.onStart?.call();
+        } catch (_) {
+          _resetRecording();
+          rethrow;
+        }
       },
+      onLongPressEnd: (_) => _finishRecording(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         height: 48,
@@ -213,9 +229,63 @@ class _VoiceRecordBarState extends State<_VoiceRecordBar> {
             Icon(_recording ? Icons.graphic_eq : Icons.mic),
             const SizedBox(width: 8),
             Text(_recording ? '松开发送' : '按住说话'),
+            if (_recording) ...[
+              const SizedBox(width: 8),
+              Text(_formatRecordingDuration(_elapsed)),
+            ],
           ],
         ),
       ),
     );
   }
+
+  void _tick() {
+    if (_startedAt == null || !mounted) {
+      return;
+    }
+    final elapsed = _elapsed + const Duration(seconds: 1);
+    if (elapsed >= _maxDuration) {
+      _finishRecording(forcedDuration: _maxDuration);
+      return;
+    }
+    setState(() => _elapsed = elapsed);
+  }
+
+  void _finishRecording({Duration? forcedDuration}) {
+    if (_sending) {
+      return;
+    }
+    final startedAt = _startedAt;
+    if (startedAt == null) {
+      return;
+    }
+    _sending = true;
+    final duration = forcedDuration ?? _elapsed;
+    final normalized = duration < const Duration(seconds: 1)
+        ? const Duration(seconds: 1)
+        : duration;
+    _resetRecording();
+    widget.onSend(normalized > _maxDuration ? _maxDuration : normalized);
+  }
+
+  void _resetRecording() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (!mounted) {
+      _startedAt = null;
+      _elapsed = Duration.zero;
+      _sending = false;
+      return;
+    }
+    setState(() {
+      _startedAt = null;
+      _elapsed = Duration.zero;
+      _sending = false;
+    });
+  }
+}
+
+String _formatRecordingDuration(Duration duration) {
+  final seconds = duration.inSeconds.clamp(0, 60);
+  return '00:${seconds.toString().padLeft(2, '0')}';
 }

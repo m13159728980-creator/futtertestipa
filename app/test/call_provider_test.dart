@@ -315,6 +315,41 @@ void main() {
       containsPair('alice', {'candidate': 'candidate:1'}),
     );
   });
+
+  test('remote hangup ends call locally and cleans up media', () async {
+    final media = _FakeWebRtcService();
+    final provider = CallProvider(
+      currentUserId: 'me',
+      signalingService: _FakeSignalingService(),
+      webRtcService: media,
+    );
+    await provider.handleEvent(
+      const WebSocketEvent(
+        type: 'call.invite',
+        payload: {
+          'callId': 'call-2',
+          'fromId': 'alice',
+          'participantIds': ['alice', 'me'],
+          'isGroup': false,
+        },
+      ),
+    );
+    await provider.accept();
+
+    await provider.handleEvent(
+      const WebSocketEvent(
+        type: 'call.hangup',
+        payload: {
+          'callId': 'call-2',
+          'fromId': 'alice',
+          'participants': {'alice': 'left', 'me': 'active'},
+        },
+      ),
+    );
+
+    expect(provider.session, isNull);
+    expect(media.cleanedUp, isTrue);
+  });
 }
 
 class _FakeSignalingService implements CallSignalingService {
@@ -340,6 +375,7 @@ class _FakeWebRtcService implements WebRtcService {
   final localDescriptions = <String, RtcSessionDescription>{};
   final remoteDescriptions = <String, RtcSessionDescription>{};
   final iceCandidates = <String, Map<String, dynamic>>{};
+  bool cleanedUp = false;
 
   @override
   Future<void> startLocalMedia({bool video = true}) async {
@@ -405,5 +441,7 @@ class _FakeWebRtcService implements WebRtcService {
   }
 
   @override
-  Future<void> cleanup() async {}
+  Future<void> cleanup() async {
+    cleanedUp = true;
+  }
 }

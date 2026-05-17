@@ -70,6 +70,7 @@ class AuthenticatedChatShell extends ConsumerStatefulWidget {
 class _AuthenticatedChatShellState
     extends ConsumerState<AuthenticatedChatShell> {
   bool _showingIncomingCall = false;
+  bool _showingAnyCall = false;
 
   @override
   Widget build(BuildContext context) {
@@ -81,13 +82,25 @@ class _AuthenticatedChatShellState
     });
     ref.listen(callProvider, (previous, next) {
       final session = next.session;
+      if (previous?.session != null && session == null && _showingAnyCall) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).maybePop();
+          }
+          _showingIncomingCall = false;
+          _showingAnyCall = false;
+        });
+        return;
+      }
       if (session?.state != CallState.incoming || _showingIncomingCall) {
         return;
       }
       _showingIncomingCall = true;
+      _showingAnyCall = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) {
           _showingIncomingCall = false;
+          _showingAnyCall = false;
           return;
         }
         await Navigator.of(
@@ -95,6 +108,7 @@ class _AuthenticatedChatShellState
         ).push(MaterialPageRoute<void>(builder: (_) => const CallScreen()));
         if (mounted) {
           _showingIncomingCall = false;
+          _showingAnyCall = false;
         }
       });
     });

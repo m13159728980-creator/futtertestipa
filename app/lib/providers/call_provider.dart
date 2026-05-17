@@ -176,14 +176,14 @@ class CallProvider extends ChangeNotifier {
   }
 
   Future<void> reject() async {
-    await _sendTerminal('call.reject', CallState.ended);
+    await _sendTerminal('call.reject');
   }
 
   Future<void> hangup() async {
-    await _sendTerminal('call.hangup', CallState.ended);
+    await _sendTerminal('call.hangup');
   }
 
-  Future<void> _sendTerminal(String type, CallState state) async {
+  Future<void> _sendTerminal(String type) async {
     final current = _session;
     if (current == null) {
       return;
@@ -191,11 +191,7 @@ class CallProvider extends ChangeNotifier {
     _signalingService.send(
       WebSocketEvent(type: type, payload: {'callId': current.id}),
     );
-    _session = current.copyWith(state: state);
-    _pendingSdp.clear();
-    _pendingIce.clear();
-    await _webRtcService.cleanup();
-    notifyListeners();
+    await _endLocalCall();
   }
 
   Future<void> toggleMic() async {
@@ -224,7 +220,7 @@ class CallProvider extends ChangeNotifier {
         _updateFromParticipantEvent(event.payload, CallState.active);
       case 'call.reject':
       case 'call.hangup':
-        _updateFromParticipantEvent(event.payload, null);
+        await _handleRemoteTerminal(event.payload);
       case 'call.sdp':
         await _handleSdp(event.payload);
       case 'call.ice':
@@ -275,6 +271,26 @@ class CallProvider extends ChangeNotifier {
           : current.startedAt,
       participants: participants,
     );
+    notifyListeners();
+  }
+
+  Future<void> _handleRemoteTerminal(Map<String, dynamic> payload) async {
+    final current = _session;
+    if (current == null || payload['callId']?.toString() != current.id) {
+      return;
+    }
+    await _endLocalCall();
+  }
+
+  Future<void> _endLocalCall() async {
+    _session = null;
+    _pendingSdp.clear();
+    _pendingIce.clear();
+    _isMicMuted = false;
+    _isSpeakerOn = false;
+    _isCameraOff = false;
+    _isVideoCall = false;
+    await _webRtcService.cleanup();
     notifyListeners();
   }
 
