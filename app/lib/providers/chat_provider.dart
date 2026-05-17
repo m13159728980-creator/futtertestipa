@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
+import 'package:app/core/services/sound_effect_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
@@ -50,6 +51,7 @@ final chatProvider = ChangeNotifierProvider<ChatProvider>((ref) {
     databaseFuture: ref.watch(localDatabaseServiceProvider),
     syncService: ref.watch(messageSyncServiceProvider),
     webSocketService: webSocketService,
+    soundEffects: ref.watch(soundEffectPlayerProvider),
   );
   return service;
 });
@@ -115,6 +117,7 @@ class ChatProvider extends ChangeNotifier {
     required LocalDatabaseService database,
     required MessageSyncService syncService,
     required WebSocketService webSocketService,
+    SoundEffectPlayer? soundEffects,
     Uuid? uuid,
   }) : this._(
          currentUserId: currentUserId,
@@ -122,6 +125,7 @@ class ChatProvider extends ChangeNotifier {
          databaseFuture: Future.value(database),
          syncService: syncService,
          webSocketService: webSocketService,
+         soundEffects: soundEffects,
          uuid: uuid,
        );
 
@@ -130,12 +134,14 @@ class ChatProvider extends ChangeNotifier {
     required Future<LocalDatabaseService> databaseFuture,
     required MessageSyncService syncService,
     required WebSocketService webSocketService,
+    SoundEffectPlayer? soundEffects,
     Uuid? uuid,
   }) : this._(
          currentUserId: currentUserId,
          databaseFuture: databaseFuture,
          syncService: syncService,
          webSocketService: webSocketService,
+         soundEffects: soundEffects,
          uuid: uuid,
        );
 
@@ -145,12 +151,14 @@ class ChatProvider extends ChangeNotifier {
     required Future<LocalDatabaseService> databaseFuture,
     required MessageSyncService syncService,
     required WebSocketService webSocketService,
+    SoundEffectPlayer? soundEffects,
     Uuid? uuid,
   }) : _currentUserId = currentUserId,
        _database = database,
        _databaseFuture = databaseFuture,
        _syncService = syncService,
        _webSocketService = webSocketService,
+       _soundEffects = soundEffects,
        _uuid = uuid ?? const Uuid() {
     _socketSubscription = _webSocketService.events.listen(handleEvent);
   }
@@ -160,6 +168,7 @@ class ChatProvider extends ChangeNotifier {
   final Future<LocalDatabaseService> _databaseFuture;
   final MessageSyncService _syncService;
   final WebSocketService _webSocketService;
+  final SoundEffectPlayer? _soundEffects;
   final Uuid _uuid;
   StreamSubscription<WebSocketEvent>? _socketSubscription;
 
@@ -325,6 +334,7 @@ class ChatProvider extends ChangeNotifier {
       status: MessageStatus.sent,
     );
     await _upsertLocal(message);
+    unawaited(_soundEffects?.play(SoundEffect.messageSent) ?? Future.value());
     _webSocketService.send(
       WebSocketEvent(type: 'message.send', payload: message.toJson()),
     );
@@ -354,6 +364,7 @@ class ChatProvider extends ChangeNotifier {
       status: MessageStatus.sent,
     );
     await _upsertLocal(message);
+    unawaited(_soundEffects?.play(SoundEffect.messageSent) ?? Future.value());
     _webSocketService.send(
       WebSocketEvent(type: 'message.send', payload: message.toJson()),
     );
@@ -370,6 +381,10 @@ class ChatProvider extends ChangeNotifier {
         }
         await _upsertLocal(message);
         if (message.fromId != _currentUserId) {
+          unawaited(
+            _soundEffects?.play(SoundEffect.messageReceived) ??
+                Future.value(),
+          );
           final key = _key(message.toType, _conversationPeer(message));
           if (key == _activeConversationKey) {
             _unreadCounts[key] = 0;

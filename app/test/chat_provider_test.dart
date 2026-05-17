@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/core/services/api_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
+import 'package:app/core/services/sound_effect_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/core/utils/crypto_service.dart';
 import 'package:app/models/message.dart';
@@ -224,6 +225,47 @@ void main() {
     expect(message.content, contains('/local/voice-1.m4a'));
     expect(message.content, contains('"durationMs":3000'));
     expect(socket.sentJson.last['payload'], containsPair('type', 'voice'));
+
+    provider.dispose();
+    await database.close();
+    await webSocketService.dispose();
+  });
+
+  test('sent messages and incoming messages play chat sound effects', () async {
+    final database = LocalDatabaseService(
+      cryptoService: CryptoService(CryptoService.generateKey()),
+      store: InMemoryMessageStore(),
+    );
+    final socket = _FakeWebSocketChannel();
+    final webSocketService = WebSocketService(connector: (_) => socket);
+    webSocketService.connect(token: 'token-1');
+    final sounds = _FakeSoundEffects();
+    final provider = ChatProvider(
+      currentUserId: 'me',
+      database: database,
+      syncService: NoopMessageSyncService(),
+      webSocketService: webSocketService,
+      soundEffects: sounds,
+    );
+
+    await provider.sendText('alice', 'hello');
+    await provider.handleEvent(
+      WebSocketEvent(
+        type: 'message.created',
+        payload: {
+          'message': _message(
+            id: 'incoming-sound',
+            fromId: 'alice',
+            toId: 'me',
+          ).toJson(),
+        },
+      ),
+    );
+
+    expect(sounds.played, [
+      SoundEffect.messageSent,
+      SoundEffect.messageReceived,
+    ]);
 
     provider.dispose();
     await database.close();
@@ -826,6 +868,23 @@ class _StaticMessageSyncService implements MessageSyncService {
   }) async {
     return messages;
   }
+}
+
+class _FakeSoundEffects implements SoundEffectPlayer {
+  final played = <SoundEffect>[];
+
+  @override
+  Future<void> play(SoundEffect effect) async {
+    played.add(effect);
+  }
+
+  @override
+  Future<void> startRinging() async {
+    played.add(SoundEffect.callRinging);
+  }
+
+  @override
+  Future<void> stopRinging() async {}
 }
 
 User _user({String token = 'token-1'}) {

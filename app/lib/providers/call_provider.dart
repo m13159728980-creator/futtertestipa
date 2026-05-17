@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/core/services/sound_effect_service.dart';
 import 'package:app/core/services/webrtc_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/models/call_session.dart';
@@ -21,6 +22,7 @@ final callProvider = ChangeNotifierProvider<CallProvider>((ref) {
     currentUserId: auth.user?.id ?? '',
     signalingService: WebSocketCallSignalingService(webSocketService),
     webRtcService: ref.watch(webRtcServiceProvider),
+    soundEffects: ref.watch(soundEffectPlayerProvider),
   );
 });
 
@@ -46,11 +48,13 @@ class CallProvider extends ChangeNotifier {
     required String currentUserId,
     required CallSignalingService signalingService,
     required WebRtcService webRtcService,
+    SoundEffectPlayer? soundEffects,
     String Function()? callIdFactory,
     DateTime Function()? now,
   }) : _currentUserId = currentUserId,
        _signalingService = signalingService,
        _webRtcService = webRtcService,
+       _soundEffects = soundEffects,
        _callIdFactory = callIdFactory ?? const Uuid().v4,
        _now = now ?? DateTime.now {
     _subscription = _signalingService.events.listen(handleEvent);
@@ -61,6 +65,7 @@ class CallProvider extends ChangeNotifier {
   final String _currentUserId;
   final CallSignalingService _signalingService;
   final WebRtcService _webRtcService;
+  final SoundEffectPlayer? _soundEffects;
   final String Function() _callIdFactory;
   final DateTime Function() _now;
   StreamSubscription<WebSocketEvent>? _subscription;
@@ -129,6 +134,7 @@ class CallProvider extends ChangeNotifier {
     );
     _isVideoCall = video;
     _isCameraOff = !video;
+    unawaited(_soundEffects?.startRinging() ?? Future.value());
     await _webRtcService.startLocalMedia(video: video);
     await _ensurePeerConnections(peerIds);
     _signalingService.send(
@@ -156,6 +162,8 @@ class CallProvider extends ChangeNotifier {
     if (current == null) {
       return;
     }
+    await _soundEffects?.stopRinging();
+    unawaited(_soundEffects?.play(SoundEffect.callAccepted) ?? Future.value());
     await _webRtcService.startLocalMedia(video: _isVideoCall);
     await _ensurePeerConnections(
       current.participantIds.where((id) => id != _currentUserId),
@@ -191,7 +199,9 @@ class CallProvider extends ChangeNotifier {
     _signalingService.send(
       WebSocketEvent(type: type, payload: {'callId': current.id}),
     );
-    await _endLocalCall();
+    await _soundEffects?.stopRinging();
+    unawaited(_soundEffects?.play(SoundEffect.callEnded) ?? Future.value());
+    await _endLocalCall(stopRinging: false);
   }
 
   Future<void> toggleMic() async {
@@ -249,6 +259,7 @@ class CallProvider extends ChangeNotifier {
     );
     _isVideoCall = payload['video'] == true;
     _isCameraOff = !_isVideoCall;
+    unawaited(_soundEffects?.startRinging() ?? Future.value());
     notifyListeners();
   }
 
@@ -271,6 +282,12 @@ class CallProvider extends ChangeNotifier {
           : current.startedAt,
       participants: participants,
     );
+    if (state == CallState.active) {
+      unawaited(_soundEffects?.stopRinging() ?? Future.value());
+      unawaited(
+        _soundEffects?.play(SoundEffect.callAccepted) ?? Future.value(),
+      );
+    }
     notifyListeners();
   }
 
@@ -279,10 +296,15 @@ class CallProvider extends ChangeNotifier {
     if (current == null || payload['callId']?.toString() != current.id) {
       return;
     }
-    await _endLocalCall();
+    await _soundEffects?.stopRinging();
+    unawaited(_soundEffects?.play(SoundEffect.callEnded) ?? Future.value());
+    await _endLocalCall(stopRinging: false);
   }
 
-  Future<void> _endLocalCall() async {
+  Future<void> _endLocalCall({bool stopRinging = true}) async {
+    if (stopRinging) {
+      await _soundEffects?.stopRinging();
+    }
     _session = null;
     _pendingSdp.clear();
     _pendingIce.clear();

@@ -16,6 +16,9 @@ class ChatBubble extends StatelessWidget {
 
   static const mineColor = Color(0xFFDCF8C6);
   static const otherColor = Color(0xFFEDEDED);
+  static const bubbleTextColor = Color(0xFF10201B);
+  static const bubbleSecondaryTextColor = Color(0x990F1F1A);
+  static const bubbleTertiaryTextColor = Color(0x730F1F1A);
 
   final Message message;
   final String currentUserId;
@@ -64,7 +67,7 @@ class ChatBubble extends StatelessWidget {
                     senderName!,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: Colors.black54,
+                      color: bubbleSecondaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -74,7 +77,8 @@ class ChatBubble extends StatelessWidget {
                   child: voicePayload == null
                       ? Text(
                           content,
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: bubbleTextColor),
                         )
                       : MediaMessageTile(
                           type: MessageType.voice,
@@ -102,7 +106,7 @@ class ChatBubble extends StatelessWidget {
                       _messageTimeLabel(message.timestamp),
                       key: const Key('chat-bubble-time'),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.black45,
+                        color: bubbleTertiaryTextColor,
                         fontSize: 11,
                       ),
                     ),
@@ -214,7 +218,7 @@ class _MessageStatusIcon extends StatelessWidget {
     }
     final color = status == MessageStatus.read
         ? const Color(0xFF2AABEE)
-        : Colors.black45;
+        : ChatBubble.bubbleTertiaryTextColor;
     final icon = switch (status) {
       MessageStatus.sent => Icons.check,
       MessageStatus.delivered || MessageStatus.read => Icons.done_all,

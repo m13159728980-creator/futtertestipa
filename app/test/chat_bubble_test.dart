@@ -180,6 +180,25 @@ void main() {
     expect(find.byKey(const Key('chat-bubble-time')), findsOneWidget);
     expect(find.text('01:02'), findsOneWidget);
   });
+
+  testWidgets('dark theme keeps text readable inside light message bubbles', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(),
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(fromId: 'me', content: 'dark readable'),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    final text = tester.widget<Text>(find.text('dark readable'));
+    expect(text.style?.color, const Color(0xFF10201B));
+  });
 }
 
 BoxDecoration _bubbleDecoration(WidgetTester tester) {

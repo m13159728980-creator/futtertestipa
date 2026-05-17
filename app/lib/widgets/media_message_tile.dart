@@ -80,6 +80,9 @@ class MediaMessageTile extends StatelessWidget {
   final VoidCallback? onTap;
   final VoicePlaybackController? voicePlaybackController;
 
+  static const embeddedTextColor = Color(0xFF10201B);
+  static const embeddedSecondaryTextColor = Color(0x990F1F1A);
+
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
@@ -212,15 +215,15 @@ class _VoiceTileState extends State<_VoiceTile> {
         remoteUrl: widget.remoteUrl,
       );
       if (!started && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('语音文件不可用')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('语音文件不可用')));
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('语音播放失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('语音播放失败')));
       }
     } finally {
       if (mounted) {
@@ -269,7 +272,7 @@ class _VoiceTileState extends State<_VoiceTile> {
                 _formatDuration(widget.duration),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   height: 1,
-                  color: Colors.black54,
+                  color: MediaMessageTile.embeddedSecondaryTextColor,
                 ),
               ),
             ],
@@ -285,20 +288,7 @@ class _VoiceWavePainter extends CustomPainter {
 
   final Color color;
 
-  static const _bars = [
-    7,
-    12,
-    18,
-    10,
-    20,
-    15,
-    8,
-    19,
-    12,
-    17,
-    9,
-    14,
-  ];
+  static const _bars = [7, 12, 18, 10, 20, 15, 8, 19, 12, 17, 9, 14];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -366,12 +356,16 @@ class _TitleAndSize extends StatelessWidget {
         Text(
           title,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: MediaMessageTile.embeddedTextColor,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           _formatBytes(fileSizeBytes),
-          style: Theme.of(context).textTheme.labelSmall,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: MediaMessageTile.embeddedSecondaryTextColor,
+          ),
         ),
       ],
     );

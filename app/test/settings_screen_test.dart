@@ -45,6 +45,40 @@ void main() {
     expect(settings.settings.languageCode, 'zh');
   });
 
+  testWidgets('theme mode can follow system or be forced light and dark', (
+    tester,
+  ) async {
+    final settings = SettingsProvider(
+      storage: InMemorySettingsStorage(),
+      secureWindowService: _FakeSecureWindowService(),
+    );
+    await tester.pumpWidget(_testApp(settingsNotifier: settings));
+
+    expect(find.text('深色模式'), findsOneWidget);
+    expect(find.text('跟随系统'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settings-theme-mode-tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('深色').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.settings.themeMode, ThemeMode.dark);
+
+    await tester.tap(find.byKey(const ValueKey('settings-theme-mode-tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('浅色').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.settings.themeMode, ThemeMode.light);
+
+    await tester.tap(find.byKey(const ValueKey('settings-theme-mode-tile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('跟随系统').last);
+    await tester.pumpAndSettle();
+
+    expect(settings.settings.themeMode, ThemeMode.system);
+  });
+
   testWidgets('profile header copies own numeric ID', (tester) async {
     String? clipboardText;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
 import 'core/services/push_notification_service.dart';
+import 'core/services/sound_effect_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/call_provider.dart';
 import 'providers/chat_provider.dart';
@@ -24,20 +25,27 @@ class PrivateChatApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider).settings;
 
-    return MaterialApp(
-      title: 'PrvChat',
-      theme: AppTheme.lightFor(settings.accentColor),
-      darkTheme: AppTheme.darkFor(settings.accentColor),
-      themeMode: settings.themeMode,
-      locale: Locale(settings.languageCode),
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+    return ProviderScope(
+      overrides: [
+        settingsSoundEnabledProvider.overrideWithValue(
+          settings.soundNotifications,
+        ),
       ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: const PrivateChatShell(),
+      child: MaterialApp(
+        title: 'PrvChat',
+        theme: AppTheme.lightFor(settings.accentColor),
+        darkTheme: AppTheme.darkFor(settings.accentColor),
+        themeMode: settings.themeMode,
+        locale: Locale(settings.languageCode),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const PrivateChatShell(),
+      ),
     );
   }
 }

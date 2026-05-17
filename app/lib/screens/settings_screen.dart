@@ -58,6 +58,18 @@ class SettingsScreen extends ConsumerWidget {
           _Section(
             title: '界面',
             children: [
+              _DropdownTile<ThemeMode>(
+                key: const ValueKey('settings-theme-mode-tile'),
+                icon: Icons.dark_mode_outlined,
+                title: '深色模式',
+                value: settings.themeMode,
+                items: const {
+                  ThemeMode.system: '跟随系统',
+                  ThemeMode.light: '浅色',
+                  ThemeMode.dark: '深色',
+                },
+                onChanged: ref.read(settingsProvider).setThemeMode,
+              ),
               _DropdownTile<String>(
                 key: const ValueKey('settings-language-tile'),
                 icon: Icons.language_outlined,

@@ -53,6 +53,7 @@ dependencies:
   flutter_webrtc: ^0.12.5
   intl: ^0.20.2
   getuiflut: 0.2.40
+  audioplayers: ^6.6.0
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/sounds/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

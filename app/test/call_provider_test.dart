@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/core/services/sound_effect_service.dart';
 import 'package:app/core/services/webrtc_service.dart';
 import 'package:app/core/services/websocket_service.dart';
 import 'package:app/models/call_session.dart';
@@ -257,6 +258,45 @@ void main() {
     },
   );
 
+  test('incoming and answered calls play call sound effects', () async {
+    final sounds = _FakeSoundEffects();
+    final provider = CallProvider(
+      currentUserId: 'me',
+      signalingService: _FakeSignalingService(),
+      webRtcService: _FakeWebRtcService(),
+      soundEffects: sounds,
+      now: () => DateTime.utc(2026, 5, 10, 1),
+    );
+
+    await provider.handleEvent(
+      const WebSocketEvent(
+        type: 'call.invite',
+        payload: {
+          'callId': 'call-2',
+          'fromId': 'alice',
+          'participantIds': ['alice', 'me'],
+          'isGroup': false,
+          'title': 'Alice',
+        },
+      ),
+    );
+    await provider.accept();
+    await provider.handleEvent(
+      const WebSocketEvent(
+        type: 'call.hangup',
+        payload: {'callId': 'call-2', 'fromId': 'alice'},
+      ),
+    );
+
+    expect(sounds.events, [
+      'ring',
+      'stop',
+      SoundEffect.callAccepted.name,
+      'stop',
+      SoundEffect.callEnded.name,
+    ]);
+  });
+
   test('receiving answer sets remote description', () async {
     final media = _FakeWebRtcService();
     media.offers['alice'] = const RtcSessionDescription(
@@ -443,5 +483,24 @@ class _FakeWebRtcService implements WebRtcService {
   @override
   Future<void> cleanup() async {
     cleanedUp = true;
+  }
+}
+
+class _FakeSoundEffects implements SoundEffectPlayer {
+  final events = <String>[];
+
+  @override
+  Future<void> play(SoundEffect effect) async {
+    events.add(effect.name);
+  }
+
+  @override
+  Future<void> startRinging() async {
+    events.add('ring');
+  }
+
+  @override
+  Future<void> stopRinging() async {
+    events.add('stop');
   }
 }
