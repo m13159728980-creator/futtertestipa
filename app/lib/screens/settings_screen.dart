@@ -1,4 +1,5 @@
 import 'package:app/core/constants/avatar_catalog.dart';
+import 'package:app/core/services/ios_ui_capability_service.dart';
 import 'package:app/models/settings.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/chat_provider.dart';
@@ -16,6 +17,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider).settings;
     final auth = ref.watch(authProvider);
+    final iosUiCapabilities = ref.watch(iosUiCapabilitiesProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: _settingsBackground(context),
@@ -78,6 +80,15 @@ class SettingsScreen extends ConsumerWidget {
                 items: const {'zh': '中文', 'en': 'English'},
                 onChanged: ref.read(settingsProvider).setLanguage,
               ),
+              if (iosUiCapabilities?.isIos == true)
+                SwitchListTile(
+                  key: const ValueKey('settings-ios-native-ui-switch'),
+                  secondary: const _SettingsIcon(Icons.ios_share_outlined),
+                  title: const Text('iOS 原生界面'),
+                  subtitle: Text(_iosUiSubtitle(iosUiCapabilities!)),
+                  value: settings.iosNativeUi,
+                  onChanged: ref.read(settingsProvider).setIosNativeUi,
+                ),
             ],
           ),
           _Section(
@@ -433,6 +444,15 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _iosUiSubtitle(IosUiCapabilities capabilities) {
+  if (capabilities.supportsLiquidGlass) {
+    return 'iOS ${capabilities.majorVersion ?? 26}：Liquid Glass';
+  }
+  return capabilities.majorVersion == null || capabilities.majorVersion == 0
+      ? '当前系统：默认 iOS 界面'
+      : 'iOS ${capabilities.majorVersion}：默认 iOS 界面';
 }
 
 class _Section extends StatelessWidget {

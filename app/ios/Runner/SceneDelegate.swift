@@ -10,6 +10,25 @@ class SceneDelegate: FlutterSceneDelegate {
     super.scene(scene, willConnectTo: session, options: connectionOptions)
     if let controller = window?.rootViewController as? FlutterViewController {
       registerVoicePlaybackChannel(controller: controller)
+      registerIosUiChannel(controller: controller)
+    }
+  }
+
+  private func registerIosUiChannel(controller: FlutterViewController) {
+    FlutterMethodChannel(
+      name: "app/ios_ui",
+      binaryMessenger: controller.binaryMessenger
+    ).setMethodCallHandler { call, result in
+      switch call.method {
+      case "majorVersion":
+        if let major = Int(UIDevice.current.systemVersion.split(separator: ".").first ?? "0") {
+          result(major)
+        } else {
+          result(0)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
     }
   }
 

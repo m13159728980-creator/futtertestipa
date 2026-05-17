@@ -1,7 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/services/ios_ui_capability_service.dart';
 import 'core/themes/app_theme.dart';
 import 'core/services/push_notification_service.dart';
 import 'core/services/sound_effect_service.dart';
@@ -24,6 +26,11 @@ class PrivateChatApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider).settings;
+    final iosUiCapabilities = ref.watch(iosUiCapabilitiesProvider).valueOrNull;
+    final useIosUi = settings.iosNativeUi && iosUiCapabilities?.isIos == true;
+    final interfaceLevel = useIosUi
+        ? iosUiCapabilities!.level
+        : IosInterfaceLevel.material;
 
     return ProviderScope(
       overrides: [
@@ -33,9 +40,18 @@ class PrivateChatApp extends ConsumerWidget {
       ],
       child: MaterialApp(
         title: 'PrvChat',
-        theme: AppTheme.lightFor(settings.accentColor),
-        darkTheme: AppTheme.darkFor(settings.accentColor),
+        theme: AppTheme.lightFor(
+          settings.accentColor,
+          interfaceLevel: interfaceLevel,
+        ),
+        darkTheme: AppTheme.darkFor(
+          settings.accentColor,
+          interfaceLevel: interfaceLevel,
+        ),
         themeMode: settings.themeMode,
+        scrollBehavior: useIosUi
+            ? const CupertinoScrollBehavior()
+            : const MaterialScrollBehavior(),
         locale: Locale(settings.languageCode),
         localizationsDelegates: const [
           AppLocalizations.delegate,

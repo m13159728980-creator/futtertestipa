@@ -25,18 +25,19 @@ abstract interface class SoundEffectPlayer {
 }
 
 final soundEffectPlayerProvider = Provider<SoundEffectPlayer>((ref) {
-  final enabled = ref.watch(
-    settingsSoundEnabledProvider,
-  );
+  final enabled = ref.watch(settingsSoundEnabledProvider);
   if (!enabled) {
     return const SilentSoundEffectPlayer();
   }
   final player = SystemSoundEffectPlayer();
   ref.onDispose(player.stopRinging);
   return player;
-});
+}, dependencies: [settingsSoundEnabledProvider]);
 
-final settingsSoundEnabledProvider = Provider<bool>((ref) => true);
+final settingsSoundEnabledProvider = Provider<bool>(
+  (ref) => true,
+  dependencies: const [],
+);
 
 class SilentSoundEffectPlayer implements SoundEffectPlayer {
   const SilentSoundEffectPlayer();
@@ -52,8 +53,7 @@ class SilentSoundEffectPlayer implements SoundEffectPlayer {
 }
 
 class SystemSoundEffectPlayer implements SoundEffectPlayer {
-  SystemSoundEffectPlayer({AudioPlayer? player})
-    : _player = player;
+  SystemSoundEffectPlayer({AudioPlayer? player}) : _player = player;
 
   AudioPlayer? _player;
   Timer? _ringTimer;

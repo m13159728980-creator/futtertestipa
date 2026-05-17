@@ -25,6 +25,7 @@ class AppSettings {
     this.fileAutoDownloadLimit = FileAutoDownloadLimit.tenMb,
     this.themeMode = ThemeMode.system,
     this.accentColor = AppAccentColor.blue,
+    this.iosNativeUi = false,
   });
 
   final String languageCode;
@@ -42,6 +43,7 @@ class AppSettings {
   final FileAutoDownloadLimit fileAutoDownloadLimit;
   final ThemeMode themeMode;
   final AppAccentColor accentColor;
+  final bool iosNativeUi;
 
   AppSettings copyWith({
     String? languageCode,
@@ -59,6 +61,7 @@ class AppSettings {
     FileAutoDownloadLimit? fileAutoDownloadLimit,
     ThemeMode? themeMode,
     AppAccentColor? accentColor,
+    bool? iosNativeUi,
   }) {
     return AppSettings(
       languageCode: languageCode ?? this.languageCode,
@@ -79,6 +82,7 @@ class AppSettings {
           fileAutoDownloadLimit ?? this.fileAutoDownloadLimit,
       themeMode: themeMode ?? this.themeMode,
       accentColor: accentColor ?? this.accentColor,
+      iosNativeUi: iosNativeUi ?? this.iosNativeUi,
     );
   }
 
@@ -115,6 +119,7 @@ class AppSettings {
         json['accentColor'],
         AppAccentColor.blue,
       ),
+      iosNativeUi: json['iosNativeUi'] as bool? ?? false,
     );
   }
 
@@ -139,6 +144,7 @@ class AppSettings {
       'fileAutoDownloadLimit': fileAutoDownloadLimit.name,
       'themeMode': themeMode.name,
       'accentColor': accentColor.name,
+      'iosNativeUi': iosNativeUi,
     };
   }
 

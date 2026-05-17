@@ -54,7 +54,7 @@ final chatProvider = ChangeNotifierProvider<ChatProvider>((ref) {
     soundEffects: ref.watch(soundEffectPlayerProvider),
   );
   return service;
-});
+}, dependencies: [soundEffectPlayerProvider]);
 
 abstract interface class MessageSyncService {
   Future<List<Message>> sync({
@@ -382,8 +382,7 @@ class ChatProvider extends ChangeNotifier {
         await _upsertLocal(message);
         if (message.fromId != _currentUserId) {
           unawaited(
-            _soundEffects?.play(SoundEffect.messageReceived) ??
-                Future.value(),
+            _soundEffects?.play(SoundEffect.messageReceived) ?? Future.value(),
           );
           final key = _key(message.toType, _conversationPeer(message));
           if (key == _activeConversationKey) {

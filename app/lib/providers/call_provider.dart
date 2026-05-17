@@ -24,7 +24,7 @@ final callProvider = ChangeNotifierProvider<CallProvider>((ref) {
     webRtcService: ref.watch(webRtcServiceProvider),
     soundEffects: ref.watch(soundEffectPlayerProvider),
   );
-});
+}, dependencies: [soundEffectPlayerProvider]);
 
 abstract interface class CallSignalingService {
   Stream<WebSocketEvent> get events;

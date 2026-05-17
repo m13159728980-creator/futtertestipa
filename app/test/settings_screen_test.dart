@@ -1,4 +1,5 @@
 import 'package:app/core/services/api_service.dart';
+import 'package:app/core/services/ios_ui_capability_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/secure_window_service.dart';
@@ -77,6 +78,60 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(settings.settings.themeMode, ThemeMode.system);
+  });
+
+  testWidgets('ios native ui switch is only shown on iOS and persists', (
+    tester,
+  ) async {
+    _useTallTestViewport(tester);
+    final materialSettings = SettingsProvider(
+      storage: InMemorySettingsStorage(),
+      secureWindowService: _FakeSecureWindowService(),
+    );
+
+    await tester.pumpWidget(
+      _testApp(
+        settingsNotifier: materialSettings,
+        iosUiCapabilities: const IosUiCapabilities(
+          level: IosInterfaceLevel.material,
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('settings-ios-native-ui-switch')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    final iosSettings = SettingsProvider(
+      storage: InMemorySettingsStorage(),
+      secureWindowService: _FakeSecureWindowService(),
+    );
+
+    await tester.pumpWidget(
+      _testApp(
+        settingsNotifier: iosSettings,
+        iosUiCapabilities: const IosUiCapabilities(
+          level: IosInterfaceLevel.liquidGlass,
+          majorVersion: 26,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('iOS 原生界面'), findsOneWidget);
+    expect(find.text('iOS 26：Liquid Glass'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('settings-ios-native-ui-switch')),
+    );
+    await tester.pump();
+
+    expect(iosSettings.settings.iosNativeUi, isTrue);
   });
 
   testWidgets('profile header copies own numeric ID', (tester) async {
@@ -248,10 +303,14 @@ Widget _testApp({
   required SettingsProvider settingsNotifier,
   AuthProvider? authNotifier,
   LocalDatabaseService? database,
+  IosUiCapabilities iosUiCapabilities = const IosUiCapabilities(
+    level: IosInterfaceLevel.material,
+  ),
 }) {
   return ProviderScope(
     overrides: [
       settingsProvider.overrideWith((ref) => settingsNotifier),
+      iosUiCapabilitiesProvider.overrideWith((ref) async => iosUiCapabilities),
       if (authNotifier != null)
         authProvider.overrideWith((ref) => authNotifier),
       if (database != null)

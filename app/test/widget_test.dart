@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/core/services/api_service.dart';
+import 'package:app/core/services/ios_ui_capability_service.dart';
 import 'package:app/core/services/local_database_service.dart';
 import 'package:app/core/services/secure_storage_service.dart';
 import 'package:app/core/services/websocket_service.dart';
@@ -9,7 +10,9 @@ import 'package:app/main.dart';
 import 'package:app/models/user.dart';
 import 'package:app/models/group.dart';
 import 'package:app/models/message.dart';
+import 'package:app/models/settings.dart';
 import 'package:app/providers/chat_provider.dart';
+import 'package:app/providers/settings_provider.dart';
 import 'package:app/screens/create_account_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -250,12 +253,39 @@ void main() {
     expect(socket.sentJson, isEmpty);
     expect(webSocketService.isConnected, isFalse);
   });
+
+  testWidgets('ios native ui mode uses cupertino page transitions', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _testApp(
+        settingsStorage: InMemorySettingsStorage(
+          initialSettings: const AppSettings(iosNativeUi: true),
+        ),
+        iosUiCapabilities: const IosUiCapabilities(
+          level: IosInterfaceLevel.cupertino,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    final builders = app.theme?.pageTransitionsTheme.builders;
+    expect(
+      builders?[TargetPlatform.iOS],
+      isA<CupertinoPageTransitionsBuilder>(),
+    );
+  });
 }
 
 Widget _testApp({
   SecureStorageService? secureStorageService,
   ApiService? apiService,
   WebSocketService? webSocketService,
+  SettingsStorage? settingsStorage,
+  IosUiCapabilities iosUiCapabilities = const IosUiCapabilities(
+    level: IosInterfaceLevel.material,
+  ),
 }) {
   return ProviderScope(
     overrides: [
@@ -263,6 +293,9 @@ Widget _testApp({
         secureStorageService ?? InMemorySecureStorage(),
       ),
       apiServiceProvider.overrideWithValue(apiService ?? _OfflineApiService()),
+      if (settingsStorage != null)
+        settingsStorageProvider.overrideWithValue(settingsStorage),
+      iosUiCapabilitiesProvider.overrideWith((ref) async => iosUiCapabilities),
       if (webSocketService != null)
         webSocketServiceProvider.overrideWithValue(webSocketService),
       messageStoreProvider.overrideWithValue(InMemoryMessageStore()),

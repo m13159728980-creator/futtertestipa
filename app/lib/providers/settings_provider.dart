@@ -185,6 +185,10 @@ class SettingsProvider extends ChangeNotifier {
     return _update(_settings.copyWith(accentColor: value));
   }
 
+  Future<void> setIosNativeUi(bool value) {
+    return _update(_settings.copyWith(iosNativeUi: value));
+  }
+
   Future<void> clearCache() {
     return _cacheService.clearCache();
   }
