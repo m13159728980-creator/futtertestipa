@@ -11,6 +11,7 @@
         android:label="PrvChat"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         tools:replace="android:label"
         android:usesCleartextTraffic="true">
         <activity
