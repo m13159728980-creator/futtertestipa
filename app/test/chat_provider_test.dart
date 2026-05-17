@@ -307,6 +307,47 @@ void main() {
     await webSocketService.dispose();
   });
 
+  test(
+    'sends video attachments as file messages with video metadata',
+    () async {
+      final database = LocalDatabaseService(
+        cryptoService: CryptoService(CryptoService.generateKey()),
+        store: InMemoryMessageStore(),
+      );
+      final socket = _FakeWebSocketChannel();
+      final webSocketService = WebSocketService(connector: (_) => socket);
+      webSocketService.connect(token: 'token-1');
+      final provider = ChatProvider(
+        currentUserId: 'me',
+        database: database,
+        syncService: NoopMessageSyncService(),
+        webSocketService: webSocketService,
+      );
+
+      await provider.sendMedia(
+        peerId: 'alice',
+        type: MessageType.file,
+        payload: const MediaMessagePayload(
+          kind: 'video',
+          url: '/media/video-1',
+          localPath: '/local/video.mp4',
+          title: 'video.mp4',
+          sizeBytes: 16384,
+        ),
+      );
+
+      final message = provider.messagesFor('alice').single;
+      expect(message.type, MessageType.file);
+      expect(message.content, contains('"kind":"video"'));
+      expect(message.content, contains('/media/video-1'));
+      expect(socket.sentJson.last['payload'], containsPair('type', 'file'));
+
+      provider.dispose();
+      await database.close();
+      await webSocketService.dispose();
+    },
+  );
+
   test('sent messages and incoming messages play chat sound effects', () async {
     final database = LocalDatabaseService(
       cryptoService: CryptoService(CryptoService.generateKey()),

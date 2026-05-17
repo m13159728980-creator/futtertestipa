@@ -210,6 +210,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? MessageType.image
                 : MessageType.file,
             payload: MediaMessagePayload(
+              kind: action == ComposerAttachmentAction.video
+                  ? 'video'
+                  : action == ComposerAttachmentAction.image
+                  ? 'image'
+                  : 'file',
               url: remotePath,
               localPath: preparedFile.path,
               title: title,

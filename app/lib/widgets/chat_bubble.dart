@@ -94,6 +94,7 @@ class ChatBubble extends StatelessWidget {
                             title: voicePayload.title,
                             fileSizeBytes: voicePayload.sizeBytes,
                             duration: voicePayload.duration,
+                            isVideo: voicePayload.isVideo,
                           ),
                   ),
                   const SizedBox(height: 4),
@@ -192,6 +193,7 @@ _MediaBubblePayload? _mediaPayload(
     }
     return _MediaBubblePayload(
       type: payloadType,
+      isVideo: kind == 'video',
       url: decoded['url']?.toString(),
       localPath: decoded['localPath']?.toString(),
       title: decoded['title']?.toString(),
@@ -209,6 +211,7 @@ _MediaBubblePayload? _mediaPayload(
         _looksLikeVoiceUrl(content)) {
       return _MediaBubblePayload(
         type: MessageType.voice,
+        isVideo: false,
         url: content,
         localPath: null,
         title: null,
@@ -279,6 +282,7 @@ bool _looksLikeVoiceUrl(String value) {
 class _MediaBubblePayload {
   const _MediaBubblePayload({
     required this.type,
+    required this.isVideo,
     required this.url,
     required this.localPath,
     required this.title,
@@ -287,6 +291,7 @@ class _MediaBubblePayload {
   });
 
   final MessageType type;
+  final bool isVideo;
   final String? url;
   final String? localPath;
   final String? title;

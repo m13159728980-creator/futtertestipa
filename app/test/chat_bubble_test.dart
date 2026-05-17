@@ -132,6 +132,28 @@ void main() {
     expect(find.textContaining('8.0 KB'), findsOneWidget);
   });
 
+  testWidgets('video attachments render video metadata', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatBubble(
+            message: _message(
+              fromId: 'alice',
+              type: MessageType.file,
+              content:
+                  '{"kind":"video","url":"/media/video-1","localPath":"/local/video.mp4","title":"video.mp4","sizeBytes":16384}',
+            ),
+            currentUserId: 'me',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('media-message-tile')), findsOneWidget);
+    expect(find.byIcon(Icons.videocam_outlined), findsOneWidget);
+    expect(find.text('video.mp4'), findsOneWidget);
+  });
+
   testWidgets('long pressing text message copies content', (tester) async {
     final copied = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(

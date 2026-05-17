@@ -61,6 +61,7 @@ class NativeVoicePlaybackController implements VoicePlaybackController {
 class MediaMessageTile extends StatelessWidget {
   const MediaMessageTile({
     required this.type,
+    this.isVideo = false,
     this.title,
     this.localPath,
     this.remoteUrl,
@@ -72,6 +73,7 @@ class MediaMessageTile extends StatelessWidget {
   });
 
   final MessageType type;
+  final bool isVideo;
   final String? title;
   final String? localPath;
   final String? remoteUrl;
@@ -120,11 +122,13 @@ class MediaMessageTile extends StatelessWidget {
               title: title ?? 'File',
               fileSizeBytes: fileSizeBytes,
               color: color,
+              isVideo: isVideo,
             ),
             _ => _FileTile(
               title: title ?? 'Media',
               fileSizeBytes: fileSizeBytes,
               color: color,
+              isVideo: isVideo,
             ),
           },
         ),
@@ -320,18 +324,24 @@ class _FileTile extends StatelessWidget {
     required this.title,
     required this.fileSizeBytes,
     required this.color,
+    required this.isVideo,
   });
 
   final String title;
   final int? fileSizeBytes;
   final Color color;
+  final bool isVideo;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.insert_drive_file, color: color, size: 36),
+        Icon(
+          isVideo ? Icons.videocam_outlined : Icons.insert_drive_file,
+          color: color,
+          size: 36,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: _TitleAndSize(title: title, fileSizeBytes: fileSizeBytes),

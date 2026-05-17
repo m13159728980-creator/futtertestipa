@@ -345,7 +345,9 @@ class ChatProvider extends ChangeNotifier {
     }
     final effectiveBurnAfter =
         burnAfter ?? _burnAfterByConversation[_key(toType, peerId)];
-    final content = jsonEncode({'kind': type.name, ...payload.toJson()});
+    final payloadJson = payload.toJson();
+    payloadJson['kind'] ??= type.name;
+    final content = jsonEncode(payloadJson);
     final message = Message(
       id: _uuid.v4(),
       fromId: _currentUserId,
@@ -635,12 +637,14 @@ class VoiceMessagePayload implements MessageMediaPayload {
 
 class MediaMessagePayload implements MessageMediaPayload {
   const MediaMessagePayload({
+    this.kind = 'file',
     required this.url,
     required this.localPath,
     required this.title,
     required this.sizeBytes,
   });
 
+  final String kind;
   final String url;
   final String localPath;
   final String title;
@@ -649,6 +653,7 @@ class MediaMessagePayload implements MessageMediaPayload {
   @override
   Map<String, Object?> toJson() {
     return {
+      'kind': kind,
       'url': url,
       'localPath': localPath,
       'title': title,
