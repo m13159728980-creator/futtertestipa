@@ -1,9 +1,68 @@
 import 'dart:io';
 
 import 'package:app/core/config/app_config.dart';
+import 'package:app/core/services/media_service.dart';
 import 'package:app/models/message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+class MediaOpenResult {
+  const MediaOpenResult({required this.success, this.message});
+
+  final bool success;
+  final String? message;
+}
+
+abstract class MediaOpenController {
+  Future<MediaOpenResult> open({
+    String? localPath,
+    String? remoteUrl,
+    String? title,
+    required bool isVideo,
+  });
+}
+
+class NativeMediaOpenController implements MediaOpenController {
+  NativeMediaOpenController({
+    MediaService? mediaService,
+    MethodChannel channel = const MethodChannel('app/media_open'),
+  }) : _mediaService = mediaService ?? MediaService(),
+       _channel = channel;
+
+  final MediaService _mediaService;
+  final MethodChannel _channel;
+
+  @override
+  Future<MediaOpenResult> open({
+    String? localPath,
+    String? remoteUrl,
+    String? title,
+    required bool isVideo,
+  }) async {
+    final local = localPath;
+    File? source;
+    if (local != null && local.isNotEmpty) {
+      final file = File(local);
+      if (await file.exists()) {
+        source = file;
+      }
+    }
+
+    final remote = remoteUrl;
+    if (source == null && remote != null && remote.isNotEmpty) {
+      source = await _mediaService.downloadToMediaFile(remote, filename: title);
+    }
+
+    if (source == null) {
+      return const MediaOpenResult(success: false, message: '文件不可用');
+    }
+
+    final opened =
+        await _channel.invokeMethod<bool>('open', {'path': source.path}) ??
+        false;
+    return MediaOpenResult(success: opened, message: opened ? null : '无法打开文件');
+  }
+}
 
 abstract class VoicePlaybackController {
   Future<bool> play({String? localPath, String? remoteUrl});
@@ -45,11 +104,7 @@ class NativeVoicePlaybackController implements VoicePlaybackController {
   }
 
   String _absoluteUrl(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-    final normalizedPath = url.startsWith('/') ? url : '/$url';
-    return '$_baseUrl$normalizedPath';
+    return _resolveAbsoluteUrl(url, baseUrl: _baseUrl);
   }
 
   @override
@@ -58,7 +113,7 @@ class NativeVoicePlaybackController implements VoicePlaybackController {
   }
 }
 
-class MediaMessageTile extends StatelessWidget {
+class MediaMessageTile extends StatefulWidget {
   const MediaMessageTile({
     required this.type,
     this.isVideo = false,
@@ -69,6 +124,7 @@ class MediaMessageTile extends StatelessWidget {
     this.duration,
     this.onTap,
     this.voicePlaybackController,
+    this.mediaOpenController,
     super.key,
   });
 
@@ -81,18 +137,101 @@ class MediaMessageTile extends StatelessWidget {
   final Duration? duration;
   final VoidCallback? onTap;
   final VoicePlaybackController? voicePlaybackController;
+  final MediaOpenController? mediaOpenController;
 
   static const embeddedTextColor = Color(0xFF10201B);
   static const embeddedSecondaryTextColor = Color(0x990F1F1A);
 
   @override
+  State<MediaMessageTile> createState() => _MediaMessageTileState();
+}
+
+class _MediaMessageTileState extends State<MediaMessageTile> {
+  late final MediaOpenController _mediaOpenController =
+      widget.mediaOpenController ?? NativeMediaOpenController();
+  bool _opening = false;
+
+  Future<void> _handleTap() async {
+    widget.onTap?.call();
+    if (widget.type == MessageType.image) {
+      await _showImageViewer();
+      return;
+    }
+    if (_opening) {
+      return;
+    }
+    setState(() => _opening = true);
+    try {
+      final result = await _mediaOpenController.open(
+        localPath: widget.localPath,
+        remoteUrl: widget.remoteUrl,
+        title: widget.title,
+        isVideo: widget.isVideo,
+      );
+      if (!result.success && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message ?? '无法打开文件')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('无法打开文件')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _opening = false);
+      }
+    }
+  }
+
+  Future<void> _showImageViewer() {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (context) {
+        return Dialog.fullscreen(
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  key: const Key('media-image-viewer'),
+                  minScale: 0.7,
+                  maxScale: 4,
+                  child: Center(
+                    child: _ImagePreview(
+                      localPath: widget.localPath,
+                      remoteUrl: widget.remoteUrl,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                right: 8,
+                child: IconButton.filled(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
-    final isVoice = type == MessageType.voice;
+    final isVoice = widget.type == MessageType.voice;
     return InkWell(
       key: const Key('media-message-tile'),
       borderRadius: BorderRadius.circular(8),
-      onTap: isVoice ? null : onTap,
+      onTap: isVoice ? null : _handleTap,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           minWidth: isVoice ? 132 : 180,
@@ -103,32 +242,35 @@ class MediaMessageTile extends StatelessWidget {
             horizontal: isVoice ? 6 : 8,
             vertical: isVoice ? 4 : 8,
           ),
-          child: switch (type) {
+          child: switch (widget.type) {
             MessageType.image => _ImageTile(
-              title: title ?? 'Image',
-              localPath: localPath,
-              fileSizeBytes: fileSizeBytes,
+              title: widget.title ?? 'Image',
+              localPath: widget.localPath,
+              remoteUrl: widget.remoteUrl,
+              fileSizeBytes: widget.fileSizeBytes,
               color: color,
             ),
             MessageType.voice => _VoiceTile(
-              localPath: localPath,
-              remoteUrl: remoteUrl,
-              duration: duration,
+              localPath: widget.localPath,
+              remoteUrl: widget.remoteUrl,
+              duration: widget.duration,
               color: color,
-              playbackController: voicePlaybackController,
-              onTap: onTap,
+              playbackController: widget.voicePlaybackController,
+              onTap: widget.onTap,
             ),
             MessageType.file => _FileTile(
-              title: title ?? 'File',
-              fileSizeBytes: fileSizeBytes,
+              title: widget.title ?? 'File',
+              fileSizeBytes: widget.fileSizeBytes,
               color: color,
-              isVideo: isVideo,
+              isVideo: widget.isVideo,
+              opening: _opening,
             ),
             _ => _FileTile(
-              title: title ?? 'Media',
-              fileSizeBytes: fileSizeBytes,
+              title: widget.title ?? 'Media',
+              fileSizeBytes: widget.fileSizeBytes,
               color: color,
-              isVideo: isVideo,
+              isVideo: widget.isVideo,
+              opening: _opening,
             ),
           },
         ),
@@ -141,12 +283,14 @@ class _ImageTile extends StatelessWidget {
   const _ImageTile({
     required this.title,
     required this.localPath,
+    required this.remoteUrl,
     required this.fileSizeBytes,
     required this.color,
   });
 
   final String title;
   final String? localPath;
+  final String? remoteUrl;
   final int? fileSizeBytes;
   final Color color;
 
@@ -158,12 +302,20 @@ class _ImageTile extends StatelessWidget {
       children: [
         AspectRatio(
           aspectRatio: 4 / 3,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _ImagePreview(
+                key: const Key('media-image-preview'),
+                localPath: localPath,
+                remoteUrl: remoteUrl,
+                fit: BoxFit.cover,
+              ),
             ),
-            child: const Icon(Icons.image, size: 44),
           ),
         ),
         const SizedBox(height: 8),
@@ -325,12 +477,14 @@ class _FileTile extends StatelessWidget {
     required this.fileSizeBytes,
     required this.color,
     required this.isVideo,
+    required this.opening,
   });
 
   final String title;
   final int? fileSizeBytes;
   final Color color;
   final bool isVideo;
+  final bool opening;
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +500,81 @@ class _FileTile extends StatelessWidget {
         Expanded(
           child: _TitleAndSize(title: title, fileSizeBytes: fileSizeBytes),
         ),
+        if (opening) ...[
+          const SizedBox(width: 8),
+          SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: color),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+class _ImagePreview extends StatelessWidget {
+  const _ImagePreview({
+    required this.localPath,
+    required this.remoteUrl,
+    required this.fit,
+    super.key,
+  });
+
+  final String? localPath;
+  final String? remoteUrl;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final local = localPath;
+    if (local != null && local.isNotEmpty && File(local).existsSync()) {
+      return Image.file(
+        File(local),
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: _errorBuilder,
+      );
+    }
+
+    final remote = remoteUrl;
+    if (remote != null && remote.isNotEmpty) {
+      return Image.network(
+        _resolveAbsoluteUrl(remote),
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) {
+            return child;
+          }
+          return const Center(
+            child: SizedBox.square(
+              dimension: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        },
+        errorBuilder: _errorBuilder,
+      );
+    }
+
+    return _imageFallback(context);
+  }
+
+  Widget _errorBuilder(
+    BuildContext context,
+    Object error,
+    StackTrace? stackTrace,
+  ) {
+    return _imageFallback(context);
+  }
+
+  Widget _imageFallback(BuildContext context) {
+    return Icon(
+      Icons.image_not_supported_outlined,
+      size: 44,
+      color: Theme.of(context).colorScheme.primary,
     );
   }
 }
@@ -402,4 +630,16 @@ String _formatBytes(int? bytes) {
     return '${(bytes / 1024).toStringAsFixed(1)} KB';
   }
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _resolveAbsoluteUrl(
+  String url, {
+  String baseUrl = AppConfig.apiBaseUrl,
+}) {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  final normalizedBaseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
+  final normalizedPath = url.startsWith('/') ? url : '/$url';
+  return '$normalizedBaseUrl$normalizedPath';
 }

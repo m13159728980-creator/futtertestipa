@@ -88,6 +88,15 @@ test('deploy.sh preserves .env and creates one with DATABASE_URL when missing', 
   expect(script).toContain('upsert_env_value "$APP_DIR/.env" WS_PORT "${WS_PORT:-10081}"');
 });
 
+test('deploy.sh repairs storage ownership after rsync preserves existing storage', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
+  const rsyncIndex = script.indexOf('rsync -a --delete');
+  const postRsyncStorageIndex = script.indexOf('ensure_storage_permissions "$APP_DIR" "$APP_USER"', rsyncIndex);
+
+  expect(script).toContain('ensure_storage_permissions()');
+  expect(postRsyncStorageIndex).toBeGreaterThan(rsyncIndex);
+});
+
 test('deploy.sh validates database passwords are URL-safe before writing or reusing DATABASE_URL', () => {
   const script = fs.readFileSync(path.join(__dirname, '..', 'deploy.sh'), 'utf8');
 

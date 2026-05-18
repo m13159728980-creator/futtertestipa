@@ -50,6 +50,14 @@ upsert_env_value() {
   fi
 }
 
+ensure_storage_permissions() {
+  local app_dir="$1"
+  local app_user="$2"
+  mkdir -p "$app_dir/storage/media" "$app_dir/storage/stickers" "$app_dir/storage/tmp/media"
+  chown -R "$app_user:$app_user" "$app_dir/storage"
+  find "$app_dir/storage" -type d -exec chmod 755 {} +
+}
+
 if ! command -v apt-get >/dev/null 2>&1; then
   echo "This deployment script expects an Ubuntu/Debian host with apt-get." >&2
   exit 1
@@ -62,12 +70,14 @@ apt-get install -y ca-certificates curl git nodejs npm postgresql postgresql-cli
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --create-home --shell /bin/bash "$APP_USER"
 mkdir -p "$APP_DIR" "$APP_DIR/storage/media" "$APP_DIR/storage/stickers" "$APP_DIR/storage/tmp"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+ensure_storage_permissions "$APP_DIR" "$APP_USER"
 
 rsync -a --delete \
   --exclude .env \
   --exclude node_modules \
   --exclude storage \
   "$REPO_DIR/" "$APP_DIR/"
+ensure_storage_permissions "$APP_DIR" "$APP_USER"
 
 cd "$APP_DIR"
 if [ ! -f "$APP_DIR/.env" ]; then

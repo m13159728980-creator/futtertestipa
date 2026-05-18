@@ -127,4 +127,36 @@ void main() {
       expect(requests.first.headers['Authorization'], 'Bearer token');
     },
   );
+
+  test(
+    'downloads remote media into the media directory with extension',
+    () async {
+      final requests = <http.Request>[];
+      final service = MediaService(
+        rootDirectory: tempDir,
+        baseUrl: 'https://example.test/api',
+        client: MockClient((request) async {
+          requests.add(request);
+          return http.Response.bytes([7, 8, 9], 200);
+        }),
+      );
+
+      final file = await service.downloadToMediaFile(
+        '/media/video-1',
+        filename: 'clip.mp4',
+        token: 'token',
+      );
+
+      expect(await file.exists(), isTrue);
+      expect(await file.readAsBytes(), [7, 8, 9]);
+      expect(file.path, contains('${p.separator}media${p.separator}'));
+      expect(file.path, endsWith('.mp4'));
+      expect(requests.single.method, 'GET');
+      expect(
+        requests.single.url,
+        Uri.parse('https://example.test/api/media/video-1'),
+      );
+      expect(requests.single.headers['Authorization'], 'Bearer token');
+    },
+  );
 }

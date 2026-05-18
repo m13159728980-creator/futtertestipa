@@ -156,6 +156,21 @@ class MediaService {
     return response.bodyBytes;
   }
 
+  Future<File> downloadToMediaFile(
+    String path, {
+    String? filename,
+    String? token,
+  }) async {
+    final bytes = await download(path, token: token);
+    final media = await mediaDirectory();
+    final digest = sha256.convert(utf8.encode(path)).toString();
+    final extension =
+        _safeExtension(filename) ?? _safeExtension(path) ?? '.bin';
+    final output = File(p.join(media.path, '$digest$extension'));
+    await output.writeAsBytes(bytes);
+    return output;
+  }
+
   Future<void> clearCache() async {
     for (final directory in [
       await cacheDirectory(),
@@ -188,5 +203,17 @@ class MediaService {
       return _rootDirectory;
     }
     return getApplicationDocumentsDirectory();
+  }
+
+  String? _safeExtension(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    final extension = p.extension(Uri.decodeComponent(value.split('?').first));
+    if (extension.isEmpty || extension.length > 16) {
+      return null;
+    }
+    final normalized = extension.toLowerCase();
+    return RegExp(r'^\.[a-z0-9]+$').hasMatch(normalized) ? normalized : null;
   }
 }

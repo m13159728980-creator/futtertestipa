@@ -40,6 +40,92 @@ void main() {
     expect(playback.localPath, 'local-voice.m4a');
     expect(playback.remoteUrl, '/media/voice-1');
   });
+
+  testWidgets('image tile previews media and opens a viewer on tap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: MediaMessageTile(
+              type: MessageType.image,
+              remoteUrl: '/media/photo-1',
+              title: 'photo.png',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('media-image-preview')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('media-message-tile')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('media-image-viewer')), findsOneWidget);
+  });
+
+  testWidgets('file tile opens through the system media opener', (
+    tester,
+  ) async {
+    final opener = _FakeMediaOpenController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: MediaMessageTile(
+              type: MessageType.file,
+              localPath: '/local/doc.pdf',
+              remoteUrl: '/media/doc-1',
+              title: 'doc.pdf',
+              fileSizeBytes: 4096,
+              mediaOpenController: opener,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('media-message-tile')));
+    await tester.pump();
+
+    expect(opener.openedLocalPath, '/local/doc.pdf');
+    expect(opener.openedRemoteUrl, '/media/doc-1');
+    expect(opener.openedTitle, 'doc.pdf');
+    expect(opener.openedIsVideo, isFalse);
+  });
+
+  testWidgets('video tile opens through the system media opener', (
+    tester,
+  ) async {
+    final opener = _FakeMediaOpenController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: MediaMessageTile(
+              type: MessageType.file,
+              isVideo: true,
+              remoteUrl: '/media/video-1',
+              title: 'video.mp4',
+              mediaOpenController: opener,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('media-message-tile')));
+    await tester.pump();
+
+    expect(opener.openedRemoteUrl, '/media/video-1');
+    expect(opener.openedTitle, 'video.mp4');
+    expect(opener.openedIsVideo, isTrue);
+  });
 }
 
 class _FakeVoicePlaybackController implements VoicePlaybackController {
@@ -55,4 +141,25 @@ class _FakeVoicePlaybackController implements VoicePlaybackController {
 
   @override
   void dispose() {}
+}
+
+class _FakeMediaOpenController implements MediaOpenController {
+  String? openedLocalPath;
+  String? openedRemoteUrl;
+  String? openedTitle;
+  bool? openedIsVideo;
+
+  @override
+  Future<MediaOpenResult> open({
+    String? localPath,
+    String? remoteUrl,
+    String? title,
+    required bool isVideo,
+  }) async {
+    openedLocalPath = localPath;
+    openedRemoteUrl = remoteUrl;
+    openedTitle = title;
+    openedIsVideo = isVideo;
+    return const MediaOpenResult(success: true);
+  }
 }

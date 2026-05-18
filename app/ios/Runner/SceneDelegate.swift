@@ -1,4 +1,5 @@
 import Flutter
+import ObjectiveC
 import UIKit
 
 class SceneDelegate: FlutterSceneDelegate {
@@ -10,6 +11,7 @@ class SceneDelegate: FlutterSceneDelegate {
     super.scene(scene, willConnectTo: session, options: connectionOptions)
     if let controller = window?.rootViewController as? FlutterViewController {
       registerVoicePlaybackChannel(controller: controller)
+      registerMediaOpenChannel(controller: controller)
       registerIosUiChannel(controller: controller)
     }
   }
@@ -65,6 +67,74 @@ class SceneDelegate: FlutterSceneDelegate {
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  private func registerMediaOpenChannel(controller: FlutterViewController) {
+    FlutterMethodChannel(
+      name: "app/media_open",
+      binaryMessenger: controller.binaryMessenger
+    ).setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "open":
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let path = arguments["path"] as? String,
+          !path.isEmpty
+        else {
+          result(false)
+          return
+        }
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+          result(false)
+          return
+        }
+        self?.window?.rootViewController?.presentDocument(at: url)
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+}
+
+private final class DocumentPreviewDelegate: NSObject, UIDocumentInteractionControllerDelegate {
+  weak var viewController: UIViewController?
+
+  init(viewController: UIViewController) {
+    self.viewController = viewController
+  }
+
+  func documentInteractionControllerViewControllerForPreview(
+    _ controller: UIDocumentInteractionController
+  ) -> UIViewController {
+    viewController ?? UIViewController()
+  }
+}
+
+private var documentPreviewDelegateKey: UInt8 = 0
+private var documentControllerKey: UInt8 = 0
+
+private extension UIViewController {
+  func presentDocument(at url: URL) {
+    let delegate = DocumentPreviewDelegate(viewController: self)
+    let controller = UIDocumentInteractionController(url: url)
+    controller.delegate = delegate
+    objc_setAssociatedObject(
+      self,
+      &documentPreviewDelegateKey,
+      delegate,
+      .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    )
+    objc_setAssociatedObject(
+      self,
+      &documentControllerKey,
+      controller,
+      .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    )
+    if !controller.presentPreview(animated: true) {
+      controller.presentOptionsMenu(from: view.bounds, in: view, animated: true)
     }
   }
 }
